@@ -1,0 +1,25 @@
+CSMS Database Backup Information
+================================
+Backup Date: Thu Jul 17 23:07:38 EAT 2025
+Database Name: csms_db
+Database Host: localhost
+Database Port: 5432
+Database User: postgres
+PostgreSQL Version: psql (PostgreSQL) 16.9 (Ubuntu 16.9-0ubuntu0.24.04.1)
+Backup Directory: /mnt/c/hamisho/spring/csms/database-backup
+
+Database Size Information:
+Database Size:
+ database_size 
+---------------
+ 8148 kB
+(1 row)
+
+
+Table Information:
+ schemaname | tablename | size 
+------------+-----------+------
+(0 rows)
+
+
+Table Row Counts:

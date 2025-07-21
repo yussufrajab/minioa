@@ -1,0 +1,17 @@
+CSMS Database Backup Information
+================================
+Backup Date: Thu Jul 17 23:24:03 EAT 2025
+Database Name: csms_db
+Database Host: localhost:5432
+Database User: postgres
+PostgreSQL Version: psql (PostgreSQL) 16.9 (Ubuntu 16.9-0ubuntu0.24.04.1)
+
+Database Statistics:
+Database Size:
+  size   
+---------
+ 8140 kB
+(1 row)
+
+
+Tables:

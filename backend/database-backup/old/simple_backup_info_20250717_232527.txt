@@ -1,0 +1,54 @@
+CSMS Database Backup Information
+================================
+Backup Date: Thu Jul 17 23:25:28 EAT 2025
+Database Name: csms_db
+Database Host: localhost:5432
+Database User: postgres
+PostgreSQL Version: psql (PostgreSQL) 16.9 (Ubuntu 16.9-0ubuntu0.24.04.1)
+
+Database Statistics:
+Database Size:
+  size   
+---------
+ 9068 kB
+(1 row)
+
+
+Tables:
+                    List of relations
+ Schema |            Name             | Type  |  Owner   
+--------+-----------------------------+-------+----------
+ public | appeal_activities           | table | postgres
+ public | appeal_evidence             | table | postgres
+ public | audit_logs                  | table | postgres
+ public | cadre_change_documents      | table | postgres
+ public | cadre_change_requests       | table | postgres
+ public | complaint_activities        | table | postgres
+ public | complaint_appeals           | table | postgres
+ public | complaint_evidence          | table | postgres
+ public | complaints                  | table | postgres
+ public | confirmation_requests       | table | postgres
+ public | dismissal_documents         | table | postgres
+ public | dismissal_requests          | table | postgres
+ public | employee_certificates       | table | postgres
+ public | employee_documents          | table | postgres
+ public | employees                   | table | postgres
+ public | institutions                | table | postgres
+ public | leave_without_pay_requests  | table | postgres
+ public | promotion_requests          | table | postgres
+ public | request_documents           | table | postgres
+ public | request_workflow            | table | postgres
+ public | requests                    | table | postgres
+ public | resignation_documents       | table | postgres
+ public | resignation_requests        | table | postgres
+ public | retirement_documents        | table | postgres
+ public | retirement_requests         | table | postgres
+ public | service_extension_documents | table | postgres
+ public | service_extension_requests  | table | postgres
+ public | sla_trackers                | table | postgres
+ public | termination_documents       | table | postgres
+ public | termination_requests        | table | postgres
+ public | user_delegations            | table | postgres
+ public | users                       | table | postgres
+(32 rows)
+

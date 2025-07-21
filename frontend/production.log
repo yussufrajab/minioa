@@ -1,0 +1,20 @@
+
+> nextn@0.1.0 start
+> next start -p 9000
+
+   ▲ Next.js 15.2.3
+   - Local:        http://localhost:9000
+   - Network:      http://10.255.255.254:9000
+
+ ✓ Starting...
+ ✓ Ready in 11.4s
+[EMPLOYEE_LOGIN] Search criteria: {
+  zanId: '1906800240',
+  zssfNumber: 'ZSSF024',
+  payrollNumber: 'PAY0024'
+}
+[EMPLOYEE_LOGIN] Search criteria: {
+  zanId: '1905880370',
+  zssfNumber: 'ZSSF037',
+  payrollNumber: 'PAY0037'
+}

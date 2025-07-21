@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(true)",
+      "Bash(jar:*)",
+      "Bash(grep:*)",
+      "Bash(cp:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "Bash(psql:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(timeout 15s mvn spring-boot:run -DskipTests=true -Dspring-boot.run.fork=false -q)",
+      "Bash(timeout 20s mvn spring-boot:run -DskipTests=true -Dspring-boot.run.fork=false -q)",
+      "Bash(ls:*)",
+      "Bash(chmod:*)",
+      "Bash(./database-backup/backup_database.sh:*)",
+      "Bash(timeout 30 mvn:*)",
+      "Bash(touch:*)",
+      "Bash(PGPASSWORD=Mamlaka2020 psql -h localhost -U postgres -d csms_db -c \"\\dt\")",
+      "Bash(PGPASSWORD=Mamlaka2020 psql -h localhost -U postgres -l)",
+      "Bash(PGPASSWORD=Mamlaka2020 psql -h localhost -U postgres -d csms_db -c \"SELECT current_database(), count(*) FROM information_schema.tables WHERE table_schema = ''public'';\")",
+      "Bash(./database-backup/simple_backup.sh:*)",
+      "Bash(PGPASSWORD=Mamlaka2020 psql -h localhost -U postgres -d csms_db -c \"SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema = ''public'';\")",
+      "Bash(timeout:*)",
+      "Bash(PGPASSWORD=Mamlaka2020 psql -h localhost -U postgres -d csms_db -c \"SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema = ''public'';\")"
+    ],
+    "deny": []
+  }
+}

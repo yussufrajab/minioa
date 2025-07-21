@@ -1,0 +1,135 @@
+
+> nextn@0.1.0 dev
+> next dev -p 9002
+
+   ▲ Next.js 15.2.3
+   - Local:        http://localhost:9002
+   - Network:      http://192.168.43.249:9002
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ○ Compiling / ...
+ ✓ Compiled / in 1316ms (812 modules)
+ GET / 200 in 1732ms
+ ✓ Compiled in 576ms (355 modules)
+ ✓ Compiled /login in 392ms (895 modules)
+ GET /login 200 in 556ms
+ ✓ Compiled /_not-found in 238ms (899 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 314ms
+ ✓ Compiled /favicon.ico in 135ms (552 modules)
+ GET /favicon.ico 200 in 424ms
+ GET /favicon.ico 200 in 222ms
+ GET /login 200 in 73ms
+ GET /login 200 in 56ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 48ms
+ GET /favicon.ico 200 in 231ms
+ GET /favicon.ico 200 in 228ms
+ ✓ Compiled / in 139ms (540 modules)
+ GET / 200 in 243ms
+ GET /login 200 in 39ms
+ ✓ Compiled /_not-found in 405ms (918 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 463ms
+ ✓ Compiled /favicon.ico in 93ms (557 modules)
+ GET /favicon.ico 200 in 370ms
+ GET /favicon.ico 200 in 221ms
+ GET /login 200 in 113ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 31ms
+ GET /favicon.ico 200 in 227ms
+ GET /favicon.ico 200 in 225ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 990ms (1206 modules)
+ GET /dashboard 200 in 1128ms
+ ✓ Compiled in 273ms (520 modules)
+ GET /dashboard 200 in 58ms
+ GET /dashboard 200 in 18ms
+(node:371376) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET /dashboard 200 in 86ms
+ ✓ Compiled /_not-found in 265ms (1196 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 361ms
+ ✓ Compiled /favicon.ico in 118ms (703 modules)
+ GET /favicon.ico 200 in 399ms
+ GET /favicon.ico 200 in 224ms
+ GET /dashboard 200 in 112ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
+ GET /favicon.ico 200 in 230ms
+ GET /favicon.ico 200 in 218ms
+ ✓ Compiled / in 156ms (708 modules)
+ GET / 200 in 235ms
+ GET /login 200 in 43ms
+ GET /login 200 in 23ms
+ GET /dashboard 200 in 16ms
+ GET / 200 in 21ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
+ GET /login 200 in 45ms
+ GET /login 200 in 42ms
+ GET /dashboard 200 in 15ms
+ GET /dashboard 200 in 68ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 55ms
+ GET /favicon.ico 200 in 220ms
+ GET /favicon.ico 200 in 224ms
+ ✓ Compiled in 402ms (1206 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 269ms (520 modules)
+ GET /dashboard 200 in 254ms
+ GET /dashboard 200 in 50ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled /_not-found in 165ms (1196 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 226ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 22ms
+ ✓ Compiled /favicon.ico in 79ms (703 modules)
+ GET /favicon.ico 200 in 357ms
+ GET /login 200 in 228ms
+ GET /favicon.ico 200 in 94ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 28ms
+ GET /login 200 in 117ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 30ms
+ GET /favicon.ico 200 in 214ms
+ GET /favicon.ico 200 in 222ms
+ GET /favicon.ico 200 in 220ms
+ GET /favicon.ico 200 in 238ms
+ GET /dashboard 200 in 45ms
+ GET /login 200 in 40ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 25ms
+ GET /dashboard 200 in 15ms
+ GET /login 200 in 41ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 57ms
+ GET /login 200 in 46ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 46ms
+ GET /favicon.ico 200 in 229ms
+ GET /favicon.ico 200 in 224ms
+ GET /dashboard 200 in 12ms
+ GET /login 200 in 31ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 34ms
+ ○ Compiling /employee-login ...
+ ✓ Compiled /employee-login in 766ms (1240 modules)
+ GET /employee-login 200 in 974ms
+ GET /login 200 in 235ms
+ ✓ Compiled in 261ms (528 modules)
+ GET /employee-login 200 in 87ms
+ GET /login 200 in 46ms
+ GET /employee-login 200 in 22ms
+ GET /favicon.ico 200 in 226ms
+ GET /login 200 in 17ms
+ GET /dashboard 200 in 22ms
+ GET /login 200 in 124ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 40ms
+ ✓ Compiled in 574ms (1220 modules)
+ GET /login 200 in 107ms
+ GET /login 200 in 21ms
+ ✓ Compiled /favicon.ico in 79ms (711 modules)
+ GET /favicon.ico 200 in 356ms
+ ✓ Compiled in 203ms (1222 modules)
+ ✓ Compiled in 302ms (1222 modules)
+ GET /dashboard 200 in 90ms
+ GET /login 200 in 92ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 673ms (1224 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 777ms
+ GET /login 200 in 135ms
+ GET /dashboard 200 in 19ms
+ GET /login 200 in 37ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 32ms
+[?25h
