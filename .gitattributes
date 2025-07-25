@@ -1,0 +1,25 @@
+# Set all files to be normalized automatically
+* text=auto
+
+# Shell scripts, JSON, Markdown, TypeScript, etc. use LF endings
+*.sh text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+
+# Batch files and Windows-specific scripts use CRLF
+*.bat text eol=crlf
+
+# Binary files (images, PDFs, backups) - prevent line ending conversions
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.backup binary
+*.back binary
+*.exe binary
+*.dll binary
