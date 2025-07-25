@@ -22,8 +22,9 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       // Rewrite API calls to backend during development
+      // Exclude Next.js API routes we want to handle locally
       {
-        source: '/api/:path*',
+        source: '/api/:path((?!auth/employee-login|test-api).*)',
         destination: `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}/api/:path*`,
       },
     ];

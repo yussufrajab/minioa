@@ -10,6 +10,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Pagination } from "@/components/shared/pagination";
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
 import { useAuth } from '@/hooks/use-auth';
 import { ROLES } from '@/lib/constants';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -66,18 +68,36 @@ export default function PromotionPage() {
   const [proposedCadre, setProposedCadre] = useState('');
 
   // Experience-based promotion files
-  const [performanceAppraisalFileY1, setPerformanceAppraisalFileY1] = useState<FileList | null>(null);
-  const [performanceAppraisalFileY2, setPerformanceAppraisalFileY2] = useState<FileList | null>(null);
-  const [performanceAppraisalFileY3, setPerformanceAppraisalFileY3] = useState<FileList | null>(null);
-  const [cscPromotionFormFile, setCscPromotionFormFile] = useState<FileList | null>(null);
+  const [performanceAppraisalFileY1, setPerformanceAppraisalFileY1] = useState<string>('');
+  const [performanceAppraisalFileY2, setPerformanceAppraisalFileY2] = useState<string>('');
+  const [performanceAppraisalFileY3, setPerformanceAppraisalFileY3] = useState<string>('');
+  const [cscPromotionFormFile, setCscPromotionFormFile] = useState<string>('');
 
   // Education-based promotion files
-  const [certificateFile, setCertificateFile] = useState<FileList | null>(null);
+  const [certificateFile, setCertificateFile] = useState<string>('');
   const [studiedOutsideCountry, setStudiedOutsideCountry] = useState(false);
-  const [tcuFormFile, setTcuFormFile] = useState<FileList | null>(null);
+  const [tcuFormFile, setTcuFormFile] = useState<string>('');
   
   // Common file
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
+
+  // Debug file uploads
+  const handleFileUpload = (setter: (value: string) => void, fileName: string) => {
+    return (objectKey: string) => {
+      console.log(`File uploaded - ${fileName}:`, objectKey);
+      setter(objectKey);
+    };
+  };
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
 
 
@@ -128,18 +148,14 @@ export default function PromotionPage() {
   const resetFormFields = () => {
     setPromotionRequestType('');
     setProposedCadre('');
-    setPerformanceAppraisalFileY1(null);
-    setPerformanceAppraisalFileY2(null);
-    setPerformanceAppraisalFileY3(null);
-    setCscPromotionFormFile(null);
-    setCertificateFile(null);
+    setPerformanceAppraisalFileY1('');
+    setPerformanceAppraisalFileY2('');
+    setPerformanceAppraisalFileY3('');
+    setCscPromotionFormFile('');
+    setCertificateFile('');
     setStudiedOutsideCountry(false);
-    setTcuFormFile(null);
-    setLetterOfRequestFile(null);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
-    const checkboxInput = document.getElementById('studiedOutsideCountryPromo') as HTMLInputElement;
-    if (checkboxInput) checkboxInput.checked = false;
+    setTcuFormFile('');
+    setLetterOfRequestFile('');
   };
 
   const handleFetchEmployeeDetails = async () => {
@@ -222,12 +238,12 @@ export default function PromotionPage() {
 
     setIsSubmitting(true);
     
-    let documentsList: string[] = ['Letter of Request'];
+    let documentsList: string[] = [letterOfRequestFile];
     if (promotionRequestType === 'experience') {
-      documentsList.push('Performance Appraisal (Y1)', 'Performance Appraisal (Y2)', 'Performance Appraisal (Y3)', 'CSC Promotion Form');
+      documentsList.push(performanceAppraisalFileY1, performanceAppraisalFileY2, performanceAppraisalFileY3, cscPromotionFormFile);
     } else if (promotionRequestType === 'education') {
-      documentsList.push('Academic Certificate');
-      if (studiedOutsideCountry) documentsList.push('TCU Form');
+      documentsList.push(certificateFile);
+      if (studiedOutsideCountry && tcuFormFile) documentsList.push(tcuFormFile);
     }
 
     const method = isEditingExistingRequest ? 'PATCH' : 'POST';
@@ -284,20 +300,55 @@ export default function PromotionPage() {
   };
 
   const isSubmitDisabled = () => {
-    if (!!eligibilityError || isSubmitting || !employeeDetails || !promotionRequestType || !letterOfRequestFile) {
+    // Basic validation
+    const basicValidation = !!eligibilityError || isSubmitting || !employeeDetails || !promotionRequestType || letterOfRequestFile === '';
+    if (basicValidation) {
+      console.log('Basic validation failed:', { eligibilityError, isSubmitting, hasEmployee: !!employeeDetails, promotionRequestType, letterOfRequestFile });
       return true;
     }
     
+    // Experience-based validation
     if (promotionRequestType === 'experience') {
-      return !proposedCadre || !performanceAppraisalFileY1 || !performanceAppraisalFileY2 || !performanceAppraisalFileY3 || !cscPromotionFormFile;
+      const experienceValidation = !proposedCadre || performanceAppraisalFileY1 === '' || performanceAppraisalFileY2 === '' || performanceAppraisalFileY3 === '' || cscPromotionFormFile === '';
+      console.log('Experience validation:', { proposedCadre, performanceAppraisalFileY1, performanceAppraisalFileY2, performanceAppraisalFileY3, cscPromotionFormFile, failed: experienceValidation });
+      return experienceValidation;
     }
     
+    // Education-based validation
     if (promotionRequestType === 'education') {
-      return !certificateFile || (studiedOutsideCountry && !tcuFormFile);
+      const educationValidation = certificateFile === '' || (studiedOutsideCountry && tcuFormFile === '');
+      console.log('Education validation:', { certificateFile, studiedOutsideCountry, tcuFormFile, failed: educationValidation });
+      return educationValidation;
     }
     
-    return true; 
+    console.log('All validations passed, button should be enabled');
+    return false; 
   };
+
+  // Debug logging for button state
+  console.log('Promotion submit button state:', {
+    hasEmployee: !!employeeDetails,
+    promotionRequestType,
+    proposedCadre,
+    letterOfRequestFile,
+    letterOfRequestFileLength: letterOfRequestFile.length,
+    performanceAppraisalFileY1,
+    performanceAppraisalFileY1Length: performanceAppraisalFileY1.length,
+    performanceAppraisalFileY2,
+    performanceAppraisalFileY2Length: performanceAppraisalFileY2.length,
+    performanceAppraisalFileY3,
+    performanceAppraisalFileY3Length: performanceAppraisalFileY3.length,
+    cscPromotionFormFile,
+    cscPromotionFormFileLength: cscPromotionFormFile.length,
+    certificateFile,
+    certificateFileLength: certificateFile.length,
+    tcuFormFile,
+    tcuFormFileLength: tcuFormFile.length,
+    studiedOutsideCountry,
+    eligibilityError,
+    isSubmitting,
+    isDisabled: isSubmitDisabled()
+  });
 
   const handleInitialAction = async (requestId: string, action: 'forward' | 'reject') => {
     const request = pendingRequests.find(req => req.id === requestId);
@@ -461,20 +512,44 @@ export default function PromotionPage() {
                                     <Input id="proposedCadre" placeholder="e.g., Senior Officer Grade I" value={proposedCadre} onChange={(e) => setProposedCadre(e.target.value)} disabled={isSubmitting || !!eligibilityError} />
                                 </div>
                                 <div>
-                                <Label htmlFor="performanceAppraisalFileY1" className="flex items-center"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 1)</Label>
-                                <Input id="performanceAppraisalFileY1" type="file" onChange={(e) => setPerformanceAppraisalFileY1(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                <Label className="flex items-center mb-2"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 1)</Label>
+                                <FileUpload
+                                  onChange={handleFileUpload(setPerformanceAppraisalFileY1, 'Performance Appraisal Y1')}
+                                  folder="promotion/performance-appraisals"
+                                  accept=".pdf"
+                                  maxSize={2}
+                                  disabled={isSubmitting || !!eligibilityError}
+                                />
                                 </div>
                                 <div>
-                                <Label htmlFor="performanceAppraisalFileY2" className="flex items-center"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 2)</Label>
-                                <Input id="performanceAppraisalFileY2" type="file" onChange={(e) => setPerformanceAppraisalFileY2(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                <Label className="flex items-center mb-2"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 2)</Label>
+                                <FileUpload
+                                  onChange={setPerformanceAppraisalFileY2}
+                                  folder="promotion/performance-appraisals"
+                                  accept=".pdf"
+                                  maxSize={2}
+                                  disabled={isSubmitting || !!eligibilityError}
+                                />
                                 </div>
                                 <div>
-                                <Label htmlFor="performanceAppraisalFileY3" className="flex items-center"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 3)</Label>
-                                <Input id="performanceAppraisalFileY3" type="file" onChange={(e) => setPerformanceAppraisalFileY3(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                <Label className="flex items-center mb-2"><Star className="mr-2 h-4 w-4 text-primary" />Upload Performance Appraisal Form (Year 3)</Label>
+                                <FileUpload
+                                  onChange={setPerformanceAppraisalFileY3}
+                                  folder="promotion/performance-appraisals"
+                                  accept=".pdf"
+                                  maxSize={2}
+                                  disabled={isSubmitting || !!eligibilityError}
+                                />
                                 </div>
                                 <div>
-                                <Label htmlFor="cscPromotionFormFile" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Civil Service Commission Promotion Form (Tume ya Utumishi)</Label>
-                                <Input id="cscPromotionFormFile" type="file" onChange={(e) => setCscPromotionFormFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                <Label className="flex items-center mb-2"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Civil Service Commission Promotion Form (Tume ya Utumishi)</Label>
+                                <FileUpload
+                                  onChange={setCscPromotionFormFile}
+                                  folder="promotion/csc-forms"
+                                  accept=".pdf"
+                                  maxSize={2}
+                                  disabled={isSubmitting || !!eligibilityError}
+                                />
                                 </div>
                             </>
                         )}
@@ -482,8 +557,14 @@ export default function PromotionPage() {
                         {promotionRequestType === 'education' && (
                             <>
                                 <div>
-                                <Label htmlFor="certificateFilePromo" className="flex items-center"><Award className="mr-2 h-4 w-4 text-primary" />Upload Academic Certificate</Label>
-                                <Input id="certificateFilePromo" type="file" onChange={(e) => setCertificateFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                <Label className="flex items-center mb-2"><Award className="mr-2 h-4 w-4 text-primary" />Upload Academic Certificate</Label>
+                                <FileUpload
+                                  onChange={setCertificateFile}
+                                  folder="promotion/certificates"
+                                  accept=".pdf"
+                                  maxSize={2}
+                                  disabled={isSubmitting || !!eligibilityError}
+                                />
                                 </div>
                                 <div className="flex items-center space-x-2">
                                 <Checkbox id="studiedOutsideCountryPromo" checked={studiedOutsideCountry} onCheckedChange={(checked) => setStudiedOutsideCountry(checked as boolean)} disabled={isSubmitting || !!eligibilityError} />
@@ -491,15 +572,27 @@ export default function PromotionPage() {
                                 </div>
                                 {studiedOutsideCountry && (
                                 <div>
-                                    <Label htmlFor="tcuFormFilePromo" className="flex items-center"><ChevronsUpDown className="mr-2 h-4 w-4 text-primary" />Upload TCU Form</Label>
-                                    <Input id="tcuFormFilePromo" type="file" onChange={(e) => setTcuFormFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                                    <Label className="flex items-center mb-2"><ChevronsUpDown className="mr-2 h-4 w-4 text-primary" />Upload TCU Form</Label>
+                                    <FileUpload
+                                      onChange={setTcuFormFile}
+                                      folder="promotion/tcu-forms"
+                                      accept=".pdf"
+                                      maxSize={2}
+                                      disabled={isSubmitting || !!eligibilityError}
+                                    />
                                 </div>
                                 )}
                             </>
                         )}
                         <div>
-                            <Label htmlFor="letterOfRequestPromo" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
-                            <Input id="letterOfRequestPromo" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
+                            <Label className="flex items-center mb-2"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
+                            <FileUpload
+                              onChange={handleFileUpload(setLetterOfRequestFile, 'Letter of Request')}
+                              folder="promotion/letters"
+                              accept=".pdf"
+                              maxSize={2}
+                              disabled={isSubmitting || !!eligibilityError}
+                            />
                         </div>
                     </div>
                 )}
@@ -668,8 +761,8 @@ export default function PromotionPage() {
                                     <FileText className="h-4 w-4 text-muted-foreground" />
                                     <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
+                                <Button variant="link" size="sm" className="h-auto p-0 flex-shrink-0" onClick={() => handlePreviewFile(doc)}>
+                                    Preview
                                 </Button>
                             </div>
                         ))
@@ -727,6 +820,14 @@ export default function PromotionPage() {
             </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={setIsPreviewModalOpen}
+        objectKey={previewObjectKey}
+        title="Document Preview"
+      />
     </React.Fragment>
   );
 }

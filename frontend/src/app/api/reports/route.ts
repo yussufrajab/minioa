@@ -1,6 +1,328 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+interface ReportOutput {
+  data: any[];
+  headers: string[];
+  title: string;
+  totals?: any;
+  dataKeys?: string[];
+}
+
+function formatReportData(reportType: string, rawData: any[]): ReportOutput {
+  let headers: string[] = [];
+  let title: string = '';
+  let dataKeys: string[] = [];
+  let formattedData: any[] = [];
+  let totals: any = {};
+
+  switch (reportType) {
+    case 'confirmation':
+      title = 'Ripoti ya Kuthibitishwa Kazini';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Tarehe ya Ombi', 'Hali', 'Mwenye Kuidhinisha'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'requestDate', 'status', 'reviewer'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri',
+        reviewer: item.reviewedBy?.name || '-'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        requestDate: '',
+        status: formattedData.length,
+        reviewer: ''
+      };
+      break;
+
+    case 'promotion':
+    case 'promotionExperience':
+    case 'promotionEducation':
+      title = reportType === 'promotionEducation' ? 'Ripoti ya Kupandishwa Cheo kwa Maendeleo ya Elimu' :
+              reportType === 'promotionExperience' ? 'Ripoti ya Kupandishwa Cheo kwa Uzoefu' :
+              'Ripoti ya Kupandishwa Cheo';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Kada ya Sasa', 'Kada Inayopendekezwa', 'Aina', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'currentCadre', 'proposedCadre', 'promotionType', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        currentCadre: item.employee?.cadre || '-',
+        proposedCadre: item.proposedCadre || '-',
+        promotionType: item.promotionType === 'EDUCATION' ? 'Elimu' : 'Uzoefu',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        currentCadre: '',
+        proposedCadre: '',
+        promotionType: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'lwop':
+      title = 'Ripoti ya Likizo Bila Malipo';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Muda', 'Sababu', 'Tarehe ya Kuanza', 'Tarehe ya Kumaliza', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'duration', 'reason', 'startDate', 'endDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        duration: item.duration || '-',
+        reason: item.reason || '-',
+        startDate: item.startDate ? new Date(item.startDate).toLocaleDateString('sw-TZ') : '-',
+        endDate: item.endDate ? new Date(item.endDate).toLocaleDateString('sw-TZ') : '-',
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        duration: '',
+        reason: '',
+        startDate: '',
+        endDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'cadreChange':
+      title = 'Ripoti ya Kubadilishwa Kada';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Kada ya Sasa', 'Kada Mpya', 'Sababu', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'currentCadre', 'newCadre', 'reason', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        currentCadre: item.employee?.cadre || '-',
+        newCadre: item.newCadre || '-',
+        reason: item.reason || '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        currentCadre: '',
+        newCadre: '',
+        reason: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'retirement':
+    case 'voluntaryRetirement':
+    case 'compulsoryRetirement':
+    case 'illnessRetirement':
+      title = reportType === 'voluntaryRetirement' ? 'Ripoti ya Kustaafu kwa Hiari' :
+              reportType === 'compulsoryRetirement' ? 'Ripoti ya Kustaafu kwa Lazima' :
+              reportType === 'illnessRetirement' ? 'Ripoti ya Kustaafu kwa Ugonjwa' :
+              'Ripoti ya Kustaafu';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Aina ya Kustaafu', 'Tarehe ya Kustaafu', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'retirementType', 'retirementDate', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        retirementType: item.retirementType === 'VOLUNTARY' ? 'Hiari' : 
+                       item.retirementType === 'COMPULSORY' ? 'Lazima' : 
+                       item.retirementType === 'ILLNESS' ? 'Ugonjwa' : '-',
+        retirementDate: item.proposedDate ? new Date(item.proposedDate).toLocaleDateString('sw-TZ') : '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        retirementType: '',
+        retirementDate: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'resignation':
+      title = 'Ripoti ya Kuacha Kazi';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Tarehe ya Kuacha', 'Sababu', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'effectiveDate', 'reason', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        effectiveDate: item.effectiveDate ? new Date(item.effectiveDate).toLocaleDateString('sw-TZ') : '-',
+        reason: item.reason || '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        effectiveDate: '',
+        reason: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'serviceExtension':
+      title = 'Ripoti ya Nyongeza ya Utumishi';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Tarehe ya Sasa ya Kustaafu', 'Muda wa Nyongeza', 'Sababu', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'currentRetirementDate', 'extensionPeriod', 'justification', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        currentRetirementDate: item.currentRetirementDate ? new Date(item.currentRetirementDate).toLocaleDateString('sw-TZ') : '-',
+        extensionPeriod: item.requestedExtensionPeriod || '-',
+        justification: item.justification || '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        currentRetirementDate: '',
+        extensionPeriod: '',
+        justification: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'termination':
+    case 'terminationDismissal':
+      title = 'Ripoti ya Kufukuzwa/Kuachishwa Kazi';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Aina', 'Sababu', 'Tarehe ya Ombi', 'Hali'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'type', 'reason', 'requestDate', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        employeeName: item.employee?.name || '-',
+        zanId: item.employee?.zanId || '-',
+        institution: item.employee?.institution?.name || '-',
+        type: item.type === 'TERMINATION' ? 'Kuachishwa' : 'Kufukuzwa',
+        reason: item.reason || '-',
+        requestDate: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'APPROVED' ? 'Imeidhinishwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        type: '',
+        reason: '',
+        requestDate: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'complaints':
+      title = 'Ripoti ya Malalamiko';
+      headers = ['S/N', 'Mlalamikaji', 'Aina ya Malalamiko', 'Maelezo', 'Tarehe', 'Hali'];
+      dataKeys = ['sn', 'complainant', 'complaintType', 'subject', 'date', 'status'];
+      
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        complainant: item.complainant?.name || '-',
+        complaintType: item.complaintType || '-',
+        subject: item.subject || '-',
+        date: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status === 'RESOLVED' ? 'Imetatuliwa' : item.status === 'REJECTED' ? 'Imekataliwa' : 'Inasubiri'
+      }));
+      
+      totals = {
+        sn: 'JUMLA',
+        complainant: '',
+        complaintType: '',
+        subject: '',
+        date: '',
+        status: formattedData.length
+      };
+      break;
+
+    case 'contractual':
+      title = 'Ripoti ya Ajira za Mikataba';
+      headers = ['S/N', 'Jina la Mfanyakazi', 'ZAN ID', 'Taasisi', 'Aina ya Mkataba', 'Tarehe ya Kuanza', 'Tarehe ya Kumaliza'];
+      dataKeys = ['sn', 'employeeName', 'zanId', 'institution', 'contractType', 'startDate', 'endDate'];
+      
+      formattedData = [];
+      totals = {
+        sn: 'JUMLA',
+        employeeName: '',
+        zanId: '',
+        institution: '',
+        contractType: '',
+        startDate: '',
+        endDate: 0
+      };
+      break;
+
+    default:
+      title = 'Ripoti';
+      headers = ['S/N', 'Jina', 'Tarehe', 'Hali'];
+      dataKeys = ['sn', 'name', 'date', 'status'];
+      formattedData = rawData.map((item, index) => ({
+        sn: index + 1,
+        name: item.employee?.name || '-',
+        date: new Date(item.createdAt).toLocaleDateString('sw-TZ'),
+        status: item.status || '-'
+      }));
+      totals = { sn: 'JUMLA', name: '', date: '', status: formattedData.length };
+  }
+
+  return {
+    data: formattedData,
+    headers,
+    title,
+    totals,
+    dataKeys
+  };
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -218,17 +540,17 @@ export async function GET(req: Request) {
           where: {
             ...dateFilter,
             ...(institutionId && {
-              employee: {
+              complainant: {
                 institutionId: institutionId
               }
             })
           },
           include: {
-            employee: {
+            complainant: {
               select: {
                 id: true,
                 name: true,
-                zanId: true,
+                institutionId: true,
                 institution: { select: { id: true, name: true } }
               }
             }
@@ -274,9 +596,12 @@ export async function GET(req: Request) {
         }, { status: 400 });
     }
 
+    // Format the report based on type
+    const formattedReport = formatReportData(reportType, reportData);
+    
     return NextResponse.json({
+      ...formattedReport,
       success: true,
-      data: reportData,
       reportType,
       filters: {
         fromDate,

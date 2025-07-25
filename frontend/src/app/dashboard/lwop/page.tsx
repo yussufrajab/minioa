@@ -6,15 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FileUpload } from '@/components/ui/file-upload';
 import { useAuth } from '@/hooks/use-auth';
 import { ROLES, EMPLOYEES } from '@/lib/constants';
 import React, { useState, useEffect } from 'react';
 import type { Employee, User, Role } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Search, FileText, AlertTriangle, CheckSquare } from 'lucide-react';
+import { Loader2, Search, FileText, AlertTriangle, CheckSquare, Eye, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
 import { Pagination } from '@/components/shared/pagination';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
 
 interface LWOPRequest {
   id: string;
@@ -67,8 +69,8 @@ export default function LwopPage() {
   const [endDate, setEndDate] = useState('');
   const [duration, setDuration] = useState('');
   const [reason, setReason] = useState('');
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
-  const [employeeConsentLetterFile, setEmployeeConsentLetterFile] = useState<FileList | null>(null);
+  const [letterOfRequestKey, setLetterOfRequestKey] = useState<string>('');
+  const [employeeConsentLetterKey, setEmployeeConsentLetterKey] = useState<string>('');
 
   const [pendingRequests, setPendingRequests] = useState<LWOPRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<LWOPRequest | null>(null);
@@ -86,8 +88,11 @@ export default function LwopPage() {
   const [correctedEndDate, setCorrectedEndDate] = useState('');
   const [correctedDuration, setCorrectedDuration] = useState('');
   const [correctedReason, setCorrectedReason] = useState('');
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
-  const [correctedEmployeeConsentLetterFile, setCorrectedEmployeeConsentLetterFile] = useState<FileList | null>(null);
+  const [correctedLetterOfRequestKey, setCorrectedLetterOfRequestKey] = useState<string>('');
+  const [correctedEmployeeConsentLetterKey, setCorrectedEmployeeConsentLetterKey] = useState<string>('');
+  
+  const [previewFileKey, setPreviewFileKey] = useState<string>('');
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const isEmployeeOnProbation = employeeDetails?.status === 'On Probation';
   
@@ -157,10 +162,8 @@ export default function LwopPage() {
     setEndDate('');
     setDuration('');
     setReason('');
-    setLetterOfRequestFile(null);
-    setEmployeeConsentLetterFile(null);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
+    setLetterOfRequestKey('');
+    setEmployeeConsentLetterKey('');
 
     try {
         console.log(`[LWOP] Searching for employee with ZanID: ${cleanZanId}`); // Debug log
@@ -197,8 +200,8 @@ export default function LwopPage() {
     setCorrectedDuration(request.duration || '');
     setCorrectedReason(request.reason || '');
     // Clear file inputs for new upload
-    setCorrectedLetterOfRequestFile(null);
-    setCorrectedEmployeeConsentLetterFile(null);
+    setCorrectedLetterOfRequestKey('');
+    setCorrectedEmployeeConsentLetterKey('');
     setIsCorrectionModalOpen(true);
   };
 
@@ -236,7 +239,7 @@ export default function LwopPage() {
       return;
     }
     
-    if (!correctedLetterOfRequestFile || !correctedEmployeeConsentLetterFile) {
+    if (!correctedLetterOfRequestKey || !correctedEmployeeConsentLetterKey) {
         toast({ title: "Submission Error", description: "All required PDF documents must be attached.", variant: "destructive" });
         return;
     }
@@ -257,8 +260,8 @@ export default function LwopPage() {
           duration: correctedDuration, // Update duration
           reason: correctedReason,     // Update reason
           documents: [
-            correctedLetterOfRequestFile ? correctedLetterOfRequestFile[0].name : '',
-            correctedEmployeeConsentLetterFile ? correctedEmployeeConsentLetterFile[0].name : '',
+            correctedLetterOfRequestKey,
+            correctedEmployeeConsentLetterKey,
           ].filter(Boolean), // Filter out empty strings if no file is selected
           rejectionReason: null, // Clear rejection reason on resubmission
         }),
@@ -337,13 +340,13 @@ export default function LwopPage() {
     // Create duration string for display
     const durationStr = diffMonths === 1 ? '1 month' : `${diffMonths} months`;
     
-    if (!letterOfRequestFile || !employeeConsentLetterFile) {
+    if (!letterOfRequestKey || !employeeConsentLetterKey) {
         toast({ title: "Submission Error", description: "All required PDF documents must be attached.", variant: "destructive" });
         return;
     }
 
     setIsSubmitting(true);
-    const documentsList = ['Letter of Request', 'Employee Consent Letter'];
+    const documentsList = [letterOfRequestKey, employeeConsentLetterKey];
     
     const payload = {
         employeeId: employeeDetails.id,
@@ -372,10 +375,8 @@ export default function LwopPage() {
         setEndDate('');
         setDuration('');
         setReason('');
-        setLetterOfRequestFile(null);
-        setEmployeeConsentLetterFile(null);
-        const fileInputs = document.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(input => (input as HTMLInputElement).value = '');
+        setLetterOfRequestKey('');
+        setEmployeeConsentLetterKey('');
     } catch(error) {
         toast({ title: "Submission Failed", description: "Could not submit the LWOP request.", variant: "destructive" });
     } finally {
@@ -517,21 +518,33 @@ export default function LwopPage() {
                     <Label htmlFor="reasonLwop">Reason for LWOP</Label>
                     <Textarea id="reasonLwop" placeholder="State the reason for the leave request" value={reason} onChange={(e) => setReason(e.target.value)} disabled={isSubmitting || isEmployeeOnProbation} />
                   </div>
-                  <div>
-                    <Label htmlFor="letterOfRequestLwop" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (PDF Only)</Label>
-                    <Input id="letterOfRequestLwop" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting || isEmployeeOnProbation} />
-                  </div>
-                   <div>
-                    <Label htmlFor="employeeConsentLwop" className="flex items-center"><CheckSquare className="mr-2 h-4 w-4 text-primary" />Upload Employee's Consent Letter (PDF Only)</Label>
-                    <Input id="employeeConsentLwop" type="file" onChange={(e) => setEmployeeConsentLetterFile(e.target.files)} accept=".pdf" disabled={isSubmitting || isEmployeeOnProbation} />
-                  </div>
+                  <FileUpload
+                    label="Letter of Request"
+                    description="Upload the official letter of request (PDF only)"
+                    accept=".pdf"
+                    value={letterOfRequestKey}
+                    onChange={(value) => setLetterOfRequestKey(value as string)}
+                    folder="lwop/letters"
+                    disabled={isSubmitting || isEmployeeOnProbation}
+                    required
+                  />
+                  <FileUpload
+                    label="Employee's Consent Letter"
+                    description="Upload the employee's consent letter (PDF only)"
+                    accept=".pdf"
+                    value={employeeConsentLetterKey}
+                    onChange={(value) => setEmployeeConsentLetterKey(value as string)}
+                    folder="lwop/consents"
+                    disabled={isSubmitting || isEmployeeOnProbation}
+                    required
+                  />
                 </div>
               </div>
             )}
           </CardContent>
           {employeeDetails && (
             <CardFooter className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 border-t">
-                <Button onClick={handleSubmitLwopRequest} disabled={!employeeDetails || !startDate || !endDate || !reason || !letterOfRequestFile || !employeeConsentLetterFile || isSubmitting || isEmployeeOnProbation}>
+                <Button onClick={handleSubmitLwopRequest} disabled={!employeeDetails || !startDate || !endDate || !reason || !letterOfRequestKey || !employeeConsentLetterKey || isSubmitting || isEmployeeOnProbation}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Submit LWOP Request
                 </Button>
@@ -685,17 +698,69 @@ export default function LwopPage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                        selectedRequest.documents.map((doc, index) => {
+                            const fileName = doc.split('/').pop() || doc;
+                            const isLetterOfRequest = index === 0;
+                            const documentType = isLetterOfRequest ? 'Letter of Request' : 'Employee Consent Letter';
+                            
+                            return (
+                                <div key={index} className="flex items-center justify-between p-3 rounded-md border bg-secondary/50">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-sm text-foreground truncate" title={fileName}>
+                                                {documentType}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate" title={fileName}>
+                                                {fileName}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 px-2"
+                                            onClick={() => {
+                                                setPreviewFileKey(doc);
+                                                setIsPreviewModalOpen(true);
+                                            }}
+                                        >
+                                            <Eye className="h-3 w-3 mr-1" />
+                                            View
+                                        </Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 px-2"
+                                            onClick={() => {
+                                                // Create a temporary link for download with auth headers
+                                                const token = localStorage.getItem('accessToken');
+                                                if (token) {
+                                                    fetch(`/api/files/download/${doc}`, {
+                                                        headers: { 'Authorization': `Bearer ${token}` }
+                                                    })
+                                                    .then(response => response.blob())
+                                                    .then(blob => {
+                                                        const url = window.URL.createObjectURL(blob);
+                                                        const a = document.createElement('a');
+                                                        a.href = url;
+                                                        a.download = doc.split('/').pop() || 'download';
+                                                        document.body.appendChild(a);
+                                                        a.click();
+                                                        window.URL.revokeObjectURL(url);
+                                                        document.body.removeChild(a);
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            <Download className="h-3 w-3 mr-1" />
+                                            Download
+                                        </Button>
+                                    </div>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -768,26 +833,24 @@ export default function LwopPage() {
               className="col-span-3"
             />
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="letterOfRequest" className="text-right">
-              Letter of Request (PDF)
-            </Label>
-            <input
-              type="file"
-              onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)}
+          <div className="space-y-4">
+            <FileUpload
+              label="Letter of Request (PDF)"
+              description="Upload the corrected letter of request"
               accept=".pdf"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              value={correctedLetterOfRequestKey}
+              onChange={(value) => setCorrectedLetterOfRequestKey(value as string)}
+              folder="lwop/letters"
+              required
             />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="consentLetter" className="text-right">
-              Employee's Consent Letter (PDF)
-            </Label>
-            <input
-              type="file"
-              onChange={(e) => setCorrectedEmployeeConsentLetterFile(e.target.files)}
+            <FileUpload
+              label="Employee's Consent Letter (PDF)"
+              description="Upload the corrected consent letter"
               accept=".pdf"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              value={correctedEmployeeConsentLetterKey}
+              onChange={(value) => setCorrectedEmployeeConsentLetterKey(value as string)}
+              folder="lwop/consents"
+              required
             />
           </div>
         </div>
@@ -799,6 +862,17 @@ export default function LwopPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* File Preview Modal */}
+    <FilePreviewModal 
+      open={isPreviewModalOpen}
+      onOpenChange={(open) => {
+        setIsPreviewModalOpen(open);
+        if (!open) setPreviewFileKey('');
+      }}
+      objectKey={previewFileKey}
+      title="Document Preview"
+    />
     </div>
   );
 }

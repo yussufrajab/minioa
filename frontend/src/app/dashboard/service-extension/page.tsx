@@ -15,6 +15,9 @@ import { Loader2, Search, FileText, CalendarDays, CheckSquare } from 'lucide-rea
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { format, parseISO } from 'date-fns';
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
+import { useAuthStore } from '@/store/auth-store';
 
 interface ServiceExtensionRequest {
   id: string;
@@ -34,6 +37,7 @@ interface ServiceExtensionRequest {
 
 export default function ServiceExtensionPage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [zanId, setZanId] = useState('');
   const [employeeDetails, setEmployeeDetails] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
@@ -43,12 +47,22 @@ export default function ServiceExtensionPage() {
   const [currentRetirementDate, setCurrentRetirementDate] = useState('');
   const [requestedExtensionPeriod, setRequestedExtensionPeriod] = useState('');
   const [justification, setJustification] = useState('');
-  const [employeeConsentLetterFile, setEmployeeConsentLetterFile] = useState<FileList | null>(null);
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [employeeConsentLetterFile, setEmployeeConsentLetterFile] = useState<string>('');
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
 
   const [pendingRequests, setPendingRequests] = useState<ServiceExtensionRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<ServiceExtensionRequest | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -62,8 +76,8 @@ export default function ServiceExtensionPage() {
   const [correctedCurrentRetirementDate, setCorrectedCurrentRetirementDate] = useState('');
   const [correctedRequestedExtensionPeriod, setCorrectedRequestedExtensionPeriod] = useState('');
   const [correctedJustification, setCorrectedJustification] = useState('');
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
-  const [correctedEmployeeConsentLetterFile, setCorrectedEmployeeConsentLetterFile] = useState<FileList | null>(null);
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
+  const [correctedEmployeeConsentLetterFile, setCorrectedEmployeeConsentLetterFile] = useState<string>('');
 
   const fetchRequests = async () => {
     if (!user || !role) return;
@@ -88,10 +102,8 @@ export default function ServiceExtensionPage() {
     setCurrentRetirementDate('');
     setRequestedExtensionPeriod('');
     setJustification('');
-    setEmployeeConsentLetterFile(null);
-    setLetterOfRequestFile(null);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
+    setEmployeeConsentLetterFile('');
+    setLetterOfRequestFile('');
   };
 
   const handleFetchEmployeeDetails = async () => {
@@ -146,10 +158,10 @@ export default function ServiceExtensionPage() {
   
   const handleUpdateRequest = async (requestId: string, payload: any) => {
     try {
-        const response = await fetch(`/api/service-extension/${requestId}`, {
-            method: 'PUT',
+        const response = await fetch(`/api/service-extension`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({...payload, reviewedById: user?.id })
+            body: JSON.stringify({id: requestId, ...payload, reviewedById: user?.id })
         });
         if (!response.ok) throw new Error('Failed to update request');
         await fetchRequests();
@@ -172,7 +184,10 @@ export default function ServiceExtensionPage() {
 
     setIsSubmitting(true);
     
-    const documentsList = ['Letter of Request', 'Employee Consent Letter'];
+    // Build the documents array with object keys
+    const documentObjectKeys: string[] = [];
+    if (letterOfRequestFile) documentObjectKeys.push(letterOfRequestFile);
+    if (employeeConsentLetterFile) documentObjectKeys.push(employeeConsentLetterFile);
     
     const payload = {
         employeeId: employeeDetails.id,
@@ -181,7 +196,7 @@ export default function ServiceExtensionPage() {
         currentRetirementDate: new Date(currentRetirementDate).toISOString(),
         requestedExtensionPeriod,
         justification,
-        documents: documentsList
+        documents: documentObjectKeys
     };
 
     try {
@@ -249,8 +264,8 @@ export default function ServiceExtensionPage() {
     setCorrectedCurrentRetirementDate(request.currentRetirementDate ? format(parseISO(request.currentRetirementDate), 'yyyy-MM-dd') : '');
     setCorrectedRequestedExtensionPeriod(request.requestedExtensionPeriod || '');
     setCorrectedJustification(request.justification || '');
-    setCorrectedLetterOfRequestFile(null);
-    setCorrectedEmployeeConsentLetterFile(null);
+    setCorrectedLetterOfRequestFile('');
+    setCorrectedEmployeeConsentLetterFile('');
     
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach(input => (input as HTMLInputElement).value = '');
@@ -264,24 +279,27 @@ export default function ServiceExtensionPage() {
       return;
     }
 
-    if (!correctedCurrentRetirementDate || !correctedRequestedExtensionPeriod || !correctedJustification || !correctedLetterOfRequestFile || !correctedEmployeeConsentLetterFile) {
+    if (!correctedCurrentRetirementDate || !correctedRequestedExtensionPeriod || !correctedJustification || correctedLetterOfRequestFile === '' || correctedEmployeeConsentLetterFile === '') {
       toast({ title: "Validation Error", description: "Please fill all required fields and upload required documents.", variant: "destructive" });
       return;
     }
 
-    const documentsList = ['Letter of Request', 'Employee Consent Letter'];
+    const correctedDocumentObjectKeys: string[] = [];
+    if (correctedLetterOfRequestFile) correctedDocumentObjectKeys.push(correctedLetterOfRequestFile);
+    if (correctedEmployeeConsentLetterFile) correctedDocumentObjectKeys.push(correctedEmployeeConsentLetterFile);
 
     try {
-      const response = await fetch(`/api/service-extension/${request.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/service-extension`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: request.id,
           status: 'Pending HRMO/HHRMD Review',
           reviewStage: 'initial',
           currentRetirementDate: new Date(correctedCurrentRetirementDate).toISOString(),
           requestedExtensionPeriod: correctedRequestedExtensionPeriod,
           justification: correctedJustification,
-          documents: documentsList,
+          documents: correctedDocumentObjectKeys,
           rejectionReason: null,
           reviewedById: user.id
         }),
@@ -360,11 +378,25 @@ export default function ServiceExtensionPage() {
                   </div>
                   <div>
                     <Label htmlFor="letterOfRequestServiceExt" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (Required, PDF Only)</Label>
-                    <Input id="letterOfRequestServiceExt" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                    <FileUpload
+                      folder="service-extension"
+                      value={letterOfRequestFile}
+                      onChange={setLetterOfRequestFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting}
+                      required
+                    />
                   </div>
                    <div>
                     <Label htmlFor="employeeConsentLetterFile" className="flex items-center"><CheckSquare className="mr-2 h-4 w-4 text-primary" />Upload Employee Consent Letter (Required, PDF Only)</Label>
-                    <Input id="employeeConsentLetterFile" type="file" onChange={(e) => setEmployeeConsentLetterFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                    <FileUpload
+                      folder="service-extension"
+                      value={employeeConsentLetterFile}
+                      onChange={setEmployeeConsentLetterFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting}
+                      required
+                    />
                   </div>
                 </div>
               </div>
@@ -446,7 +478,7 @@ export default function ServiceExtensionPage() {
                   {request.rejectionReason && <p className="text-sm text-destructive"><span className="font-medium">Rejection Reason:</span> {request.rejectionReason}</p>}
                   <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                     <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(request); setIsDetailsModalOpen(true); }}>View Details</Button>
-                    {request.reviewStage === 'initial' && (request.status.startsWith(`Pending ${role} Review`)) && (
+                    {(role === ROLES.HRMO || role === ROLES.HHRMD) && (request.status === 'Pending HRMO/HHRMD Review') && (
                       <>
                         <Button size="sm" onClick={() => handleInitialAction(request.id, 'forward')}>Verify &amp; Forward to Commission</Button>
                         <Button size="sm" variant="destructive" onClick={() => handleInitialAction(request.id, 'reject')}>Reject &amp; Return to HRO</Button>
@@ -556,17 +588,71 @@ export default function ServiceExtensionPage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
+                        selectedRequest.documents.map((objectKey, index) => {
+                          const fileName = objectKey.split('/').pop() || objectKey;
+                          return (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                                    <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handlePreviewFile(objectKey)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const headers: HeadersInit = {};
+                                        if (accessToken) {
+                                          headers['Authorization'] = `Bearer ${accessToken}`;
+                                        }
+                                        
+                                        const response = await fetch(`/api/files/download/${objectKey}`, {
+                                          credentials: 'include',
+                                          headers
+                                        });
+                                        if (response.ok) {
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = fileName;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        } else {
+                                          toast({
+                                            title: 'Download Failed',
+                                            description: 'Could not download the file. Please try again.',
+                                            variant: 'destructive'
+                                          });
+                                        }
+                                      } catch (error) {
+                                        console.error('Download failed:', error);
+                                        toast({
+                                          title: 'Download Failed',
+                                          description: 'Could not download the file. Please try again.',
+                                          variant: 'destructive'
+                                        });
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Download
+                                  </Button>
+                                </div>
                             </div>
-                        ))
+                          );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -655,11 +741,12 @@ export default function ServiceExtensionPage() {
                     <FileText className="mr-2 h-4 w-4 text-primary" />
                     Upload Letter of Request (Required, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedLetterOfRequest" 
-                    type="file" 
-                    onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="service-extension"
+                    value={correctedLetterOfRequestFile}
+                    onChange={setCorrectedLetterOfRequestFile}
+                    onPreview={handlePreviewFile}
+                    required
                   />
                 </div>
                 <div>
@@ -667,11 +754,12 @@ export default function ServiceExtensionPage() {
                     <CheckSquare className="mr-2 h-4 w-4 text-primary" />
                     Upload Employee Consent Letter (Required, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedEmployeeConsentLetter" 
-                    type="file" 
-                    onChange={(e) => setCorrectedEmployeeConsentLetterFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="service-extension"
+                    value={correctedEmployeeConsentLetterFile}
+                    onChange={setCorrectedEmployeeConsentLetterFile}
+                    onPreview={handlePreviewFile}
+                    required
                   />
                 </div>
               </div>
@@ -688,7 +776,7 @@ export default function ServiceExtensionPage() {
               </Button>
               <Button 
                 onClick={() => handleConfirmResubmit(requestToCorrect)}
-                disabled={!correctedCurrentRetirementDate || !correctedRequestedExtensionPeriod || !correctedJustification || !correctedLetterOfRequestFile || !correctedEmployeeConsentLetterFile}
+                disabled={!correctedCurrentRetirementDate || !correctedRequestedExtensionPeriod || !correctedJustification || correctedLetterOfRequestFile === '' || correctedEmployeeConsentLetterFile === ''}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Resubmit Corrected Request
@@ -697,6 +785,18 @@ export default function ServiceExtensionPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { ROLES, EMPLOYEES } from '@/lib/constants';
+import { useAuthStore } from '@/store/auth-store';
 import React, { useState, useEffect } from 'react';
 import type { Employee, User, Role } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
@@ -15,6 +16,9 @@ import { Loader2, Search, FileText, CalendarDays, Paperclip, ShieldAlert, FileWa
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
+import { apiClient } from '@/lib/api-client';
 
 
 interface SeparationRequest {
@@ -34,6 +38,7 @@ interface SeparationRequest {
 
 export default function TerminationAndDismissalPage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [zanId, setZanId] = useState('');
   const [employeeDetails, setEmployeeDetails] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
@@ -45,22 +50,32 @@ export default function TerminationAndDismissalPage() {
   const [reason, setReason] = useState('');
 
   // Common compulsory document
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
 
   // Termination (probation) documents
-  const [terminationSupportingDocFile, setTerminationSupportingDocFile] = useState<FileList | null>(null);
+  const [terminationSupportingDocFile, setTerminationSupportingDocFile] = useState<string>('');
 
   // Dismissal (confirmed) documents
-  const [misconductEvidenceFile, setMisconductEvidenceFile] = useState<FileList | null>(null);
-  const [summonNoticeFile, setSummonNoticeFile] = useState<FileList | null>(null);
-  const [suspensionLetterFile, setSuspensionLetterFile] = useState<FileList | null>(null);
-  const [warningLettersFile, setWarningLettersFile] = useState<FileList | null>(null);
-  const [employeeExplanationLetterFile, setEmployeeExplanationLetterFile] = useState<FileList | null>(null);
-  const [otherAdditionalDocumentsFile, setOtherAdditionalDocumentsFile] = useState<FileList | null>(null);
+  const [misconductEvidenceFile, setMisconductEvidenceFile] = useState<string>('');
+  const [summonNoticeFile, setSummonNoticeFile] = useState<string>('');
+  const [suspensionLetterFile, setSuspensionLetterFile] = useState<string>('');
+  const [warningLettersFile, setWarningLettersFile] = useState<string>('');
+  const [employeeExplanationLetterFile, setEmployeeExplanationLetterFile] = useState<string>('');
+  const [otherAdditionalDocumentsFile, setOtherAdditionalDocumentsFile] = useState<string>('');
 
   const [pendingRequests, setPendingRequests] = useState<SeparationRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<SeparationRequest | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -72,8 +87,8 @@ export default function TerminationAndDismissalPage() {
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const [requestToCorrect, setRequestToCorrect] = useState<SeparationRequest | null>(null);
   const [correctedReason, setCorrectedReason] = useState('');
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
-  const [correctedSupportingDocumentFile, setCorrectedSupportingDocumentFile] = useState<FileList | null>(null);
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
+  const [correctedSupportingDocumentFile, setCorrectedSupportingDocumentFile] = useState<string>('');
 
   const fetchRequests = async () => {
     if (!user || !role) return;
@@ -98,16 +113,28 @@ export default function TerminationAndDismissalPage() {
   const resetFormFields = () => {
     setReason('');
     setEmployeeStatus(null);
-    setLetterOfRequestFile(null);
-    setTerminationSupportingDocFile(null);
-    setMisconductEvidenceFile(null);
-    setSummonNoticeFile(null);
-    setSuspensionLetterFile(null);
-    setWarningLettersFile(null);
-    setEmployeeExplanationLetterFile(null);
-    setOtherAdditionalDocumentsFile(null);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
+    setLetterOfRequestFile('');
+    setTerminationSupportingDocFile('');
+    setMisconductEvidenceFile('');
+    setSummonNoticeFile('');
+    setSuspensionLetterFile('');
+    setWarningLettersFile('');
+    setEmployeeExplanationLetterFile('');
+    setOtherAdditionalDocumentsFile('');
+  };
+
+  const isSubmitButtonDisabled = () => {
+    if (!employeeDetails || !employeeStatus || !reason.trim() || letterOfRequestFile === '' || isSubmitting) {
+      return true;
+    }
+    
+    if (employeeStatus === 'probation') {
+      // For termination, need supporting document
+      return terminationSupportingDocFile === '';
+    } else {
+      // For dismissal, need required documents
+      return misconductEvidenceFile === '' || summonNoticeFile === '' || suspensionLetterFile === '';
+    }
   };
 
   const handleFetchEmployeeDetails = async () => {
@@ -163,10 +190,10 @@ export default function TerminationAndDismissalPage() {
   
   const handleUpdateRequest = async (requestId: string, payload: any) => {
     try {
-        const response = await fetch(`/api/termination/${requestId}`, {
-            method: 'PUT',
+        const response = await fetch(`/api/termination`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({...payload, reviewedById: user?.id })
+            body: JSON.stringify({id: requestId, ...payload, reviewedById: user?.id })
         });
         if (!response.ok) throw new Error('Failed to update request');
         await fetchRequests();
@@ -184,18 +211,23 @@ export default function TerminationAndDismissalPage() {
     }
     // Validation checks...
 
-    let documentsList: string[] = ['Letter of Request'];
+    const documentObjectKeys: string[] = [];
     let type: 'TERMINATION' | 'DISMISSAL';
+    
+    // Add letter of request (always required)
+    if (letterOfRequestFile) documentObjectKeys.push(letterOfRequestFile);
     
     if (employeeStatus === 'probation') {
       type = 'TERMINATION';
-      documentsList.push('Supporting Document for Termination');
+      if (terminationSupportingDocFile) documentObjectKeys.push(terminationSupportingDocFile);
     } else {
       type = 'DISMISSAL';
-      documentsList.push('Misconduct Evidence & Investigation Report', 'Summon Notice/Invitation Letter', 'Suspension Letter');
-      if (warningLettersFile) documentsList.push('Warning Letter(s)');
-      if (employeeExplanationLetterFile) documentsList.push('Employee Explanation Letter');
-      if (otherAdditionalDocumentsFile) documentsList.push('Other Additional Document(s)');
+      if (misconductEvidenceFile) documentObjectKeys.push(misconductEvidenceFile);
+      if (summonNoticeFile) documentObjectKeys.push(summonNoticeFile);
+      if (suspensionLetterFile) documentObjectKeys.push(suspensionLetterFile);
+      if (warningLettersFile) documentObjectKeys.push(warningLettersFile);
+      if (employeeExplanationLetterFile) documentObjectKeys.push(employeeExplanationLetterFile);
+      if (otherAdditionalDocumentsFile) documentObjectKeys.push(otherAdditionalDocumentsFile);
     }
 
     setIsSubmitting(true);
@@ -206,7 +238,7 @@ export default function TerminationAndDismissalPage() {
       status: 'Pending DO/HHRMD Review',
       reason: reason,
       type,
-      documents: documentsList
+      documents: documentObjectKeys
     };
 
     try {
@@ -261,19 +293,24 @@ export default function TerminationAndDismissalPage() {
   };
 
   const handleCommissionDecision = async (requestId: string, decision: 'approved' | 'rejected') => {
+    const request = pendingRequests.find(req => req.id === requestId);
     const finalStatus = decision === 'approved' ? "Approved by Commission" : "Rejected by Commission - Request Concluded";
     const payload = { status: finalStatus, reviewStage: 'completed' };
     const success = await handleUpdateRequest(requestId, payload);
     if (success) {
-        toast({ title: `Commission Decision: ${decision === 'approved' ? 'Approved' : 'Rejected'}`, description: `Request ${requestId} has been updated.` });
+        const title = `Commission Decision: ${decision === 'approved' ? 'Approved' : 'Rejected'}`;
+        const description = decision === 'approved' 
+            ? `${request?.type || 'Separation'} request approved. Employee status will be updated accordingly.`
+            : `Request ${requestId} has been rejected by commission.`;
+        toast({ title, description });
     }
   };
 
   const handleCorrection = (request: SeparationRequest) => {
     setRequestToCorrect(request);
     setCorrectedReason(request.reason || '');
-    setCorrectedLetterOfRequestFile(null);
-    setCorrectedSupportingDocumentFile(null);
+    setCorrectedLetterOfRequestFile('');
+    setCorrectedSupportingDocumentFile('');
     
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach(input => (input as HTMLInputElement).value = '');
@@ -298,10 +335,11 @@ export default function TerminationAndDismissalPage() {
     }
 
     try {
-      const response = await fetch(`/api/termination/${request.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/termination`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: request.id,
           status: 'Pending DO/HHRMD Review',
           reviewStage: 'initial',
           reason: correctedReason,
@@ -322,19 +360,6 @@ export default function TerminationAndDismissalPage() {
     }
   };
   
-  const isSubmitButtonDisabled = () => {
-    if (!employeeDetails || !employeeStatus || !reason || !letterOfRequestFile || isSubmitting) {
-        return true;
-    }
-    if (employeeStatus === 'probation') {
-        return !terminationSupportingDocFile;
-    }
-    if (employeeStatus === 'confirmed') {
-        return !misconductEvidenceFile || !summonNoticeFile || !suspensionLetterFile;
-    }
-    return true;
-  };
-
   const paginatedRequests = pendingRequests.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -392,14 +417,28 @@ export default function TerminationAndDismissalPage() {
                   {/* Common Document */}
                   <div>
                     <Label htmlFor="letterOfRequestFile" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (Required, PDF)</Label>
-                    <Input id="letterOfRequestFile" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                    <FileUpload
+                      folder="termination"
+                      value={letterOfRequestFile}
+                      onChange={setLetterOfRequestFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting}
+                      required
+                    />
                   </div>
                   
                   {/* Termination Documents (for probationers) */}
                   {employeeStatus === 'probation' && (
                     <div>
                       <Label htmlFor="terminationSupportingDocFile" className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-primary" />Upload Supporting Document for Termination (Required, PDF)</Label>
-                      <Input id="terminationSupportingDocFile" type="file" onChange={(e) => setTerminationSupportingDocFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                      <FileUpload
+                        folder="termination"
+                        value={terminationSupportingDocFile}
+                        onChange={setTerminationSupportingDocFile}
+                        onPreview={handlePreviewFile}
+                        disabled={isSubmitting}
+                        required
+                      />
                     </div>
                   )}
 
@@ -409,28 +448,67 @@ export default function TerminationAndDismissalPage() {
                       <h4 className="text-md font-medium text-foreground pt-2">Required Dismissal Documents (PDF Only)</h4>
                       <div>
                         <Label htmlFor="misconductEvidenceFile" className="flex items-center"><ShieldAlert className="mr-2 h-4 w-4 text-destructive" />Upload Misconduct Evidence &amp; Primary Investigation Report</Label>
-                        <Input id="misconductEvidenceFile" type="file" onChange={(e) => setMisconductEvidenceFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={misconductEvidenceFile}
+                          onChange={setMisconductEvidenceFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                          required
+                        />
                       </div>
                       <div>
                         <Label htmlFor="summonNoticeFile" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Summon Notice / Invitation Letter</Label>
-                        <Input id="summonNoticeFile" type="file" onChange={(e) => setSummonNoticeFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={summonNoticeFile}
+                          onChange={setSummonNoticeFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                          required
+                        />
                       </div>
                       <div>
                         <Label htmlFor="suspensionLetterFile" className="flex items-center"><PauseOctagon className="mr-2 h-4 w-4 text-red-500" />Upload Suspension Letter</Label>
-                        <Input id="suspensionLetterFile" type="file" onChange={(e) => setSuspensionLetterFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={suspensionLetterFile}
+                          onChange={setSuspensionLetterFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                          required
+                        />
                       </div>
                       <h4 className="text-md font-medium text-foreground pt-2">Optional Supporting Documents (PDF Only)</h4>
                       <div>
                         <Label htmlFor="warningLettersFile" className="flex items-center"><FileWarning className="mr-2 h-4 w-4 text-orange-500" />Upload Warning Letter(s)</Label>
-                        <Input id="warningLettersFile" type="file" onChange={(e) => setWarningLettersFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={warningLettersFile}
+                          onChange={setWarningLettersFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                        />
                       </div>
                       <div>
                         <Label htmlFor="employeeExplanationLetterFile" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Employee Explanation Letter</Label>
-                        <Input id="employeeExplanationLetterFile" type="file" onChange={(e) => setEmployeeExplanationLetterFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={employeeExplanationLetterFile}
+                          onChange={setEmployeeExplanationLetterFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                        />
                       </div>
                       <div>
                         <Label htmlFor="otherAdditionalDocumentsFile" className="flex items-center"><Files className="mr-2 h-4 w-4 text-primary" />Upload Other Additional Documents</Label>
-                        <Input id="otherAdditionalDocumentsFile" type="file" onChange={(e) => setOtherAdditionalDocumentsFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                        <FileUpload
+                          folder="termination"
+                          value={otherAdditionalDocumentsFile}
+                          onChange={setOtherAdditionalDocumentsFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                        />
                       </div>
                     </>
                   )}
@@ -501,7 +579,7 @@ export default function TerminationAndDismissalPage() {
                   {request.rejectionReason && <p className="text-sm text-destructive"><span className="font-medium">Rejection Reason:</span> {request.rejectionReason}</p>}
                   <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                     <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(request); setIsDetailsModalOpen(true); }}>View Details</Button>
-                     {request.reviewStage === 'initial' && (request.status.startsWith(`Pending ${role} Review`)) && (
+                     {(role === ROLES.DO || role === ROLES.HHRMD) && (request.status === 'Pending DO/HHRMD Review') && (
                       <>
                         <Button size="sm" onClick={() => handleInitialAction(request.id, 'forward')}>Verify &amp; Forward to Commission</Button>
                         <Button size="sm" variant="destructive" onClick={() => handleInitialAction(request.id, 'reject')}>Reject &amp; Return to HRO</Button>
@@ -564,17 +642,71 @@ export default function TerminationAndDismissalPage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
+                        selectedRequest.documents.map((objectKey, index) => {
+                          const fileName = objectKey.split('/').pop() || objectKey;
+                          return (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                                    <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handlePreviewFile(objectKey)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const headers: HeadersInit = {};
+                                        if (accessToken) {
+                                          headers['Authorization'] = `Bearer ${accessToken}`;
+                                        }
+                                        
+                                        const response = await fetch(`/api/files/download/${objectKey}`, {
+                                          credentials: 'include',
+                                          headers
+                                        });
+                                        if (response.ok) {
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = fileName;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        } else {
+                                          toast({
+                                            title: 'Download Failed',
+                                            description: 'Could not download the file. Please try again.',
+                                            variant: 'destructive'
+                                          });
+                                        }
+                                      } catch (error) {
+                                        console.error('Download failed:', error);
+                                        toast({
+                                          title: 'Download Failed',
+                                          description: 'Could not download the file. Please try again.',
+                                          variant: 'destructive'
+                                        });
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Download
+                                  </Button>
+                                </div>
                             </div>
-                        ))
+                          );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -641,11 +773,12 @@ export default function TerminationAndDismissalPage() {
                     <FileText className="mr-2 h-4 w-4 text-primary" />
                     Upload Letter of Request (Required, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedLetterOfRequest" 
-                    type="file" 
-                    onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="termination"
+                    value={correctedLetterOfRequestFile}
+                    onChange={setCorrectedLetterOfRequestFile}
+                    onPreview={handlePreviewFile}
+                    required
                   />
                 </div>
                 <div>
@@ -653,11 +786,11 @@ export default function TerminationAndDismissalPage() {
                     <FileText className="mr-2 h-4 w-4 text-primary" />
                     Upload Supporting Document (Optional, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedSupportingDocument" 
-                    type="file" 
-                    onChange={(e) => setCorrectedSupportingDocumentFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="termination"
+                    value={correctedSupportingDocumentFile}
+                    onChange={setCorrectedSupportingDocumentFile}
+                    onPreview={handlePreviewFile}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
                     {requestToCorrect.type === 'TERMINATION' ? 'Supporting Document for termination' : 'Misconduct evidence, summon notice, or suspension letter'}
@@ -677,7 +810,7 @@ export default function TerminationAndDismissalPage() {
               </Button>
               <Button 
                 onClick={() => handleConfirmResubmit(requestToCorrect)}
-                disabled={!correctedReason || !correctedLetterOfRequestFile}
+                disabled={!correctedReason || correctedLetterOfRequestFile === ''}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Resubmit Corrected Request
@@ -686,6 +819,18 @@ export default function TerminationAndDismissalPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }

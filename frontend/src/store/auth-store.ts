@@ -28,7 +28,10 @@ export const useAuthStore = create<AuthState>()(
       
       login: async (username: string, password: string) => {
         try {
+          console.log('=== LOGIN START ===');
+          console.log('Attempting login for user:', username);
           const response = await apiClient.login(username, password);
+          console.log('API login response received:', response);
 
           if (!response.success || !response.data) {
             console.error('Login failed:', response.message);
@@ -40,36 +43,99 @@ export const useAuthStore = create<AuthState>()(
           console.log('Response data exists:', !!response.data);
           
           // The API client response structure is now { success: true, data: backendResponse }
-          // The backend response is { success: true, data: userData, message: string }
+          // The backend response is { success: true, data: authData, message: string }
           const backendResponse = response.data;
           console.log('Backend response structure:', backendResponse);
           
-          // Extract the actual user data from the backend response
-          const userData = backendResponse?.data || backendResponse;
+          // The Spring Boot response wraps auth data in another data property
+          // Let's log all possible structures to find the correct one
+          console.log('Checking different data structures:');
+          console.log('1. backendResponse:', backendResponse);
+          console.log('2. backendResponse.data:', backendResponse?.data);
+          console.log('3. backendResponse keys:', backendResponse ? Object.keys(backendResponse) : 'none');
+          
+          // The backend wraps AuthResponse in { success, message, data }
+          // So we need to extract the AuthResponse from data property
+          let authData = null;
+          
+          // Backend response structure: { success: true, message: "...", data: AuthResponse }
+          // But the logging shows backendResponse.data also has nested structure
+          // Check if we have the deeply nested structure
+          if (backendResponse?.data?.data) {
+            // Handle deeply nested structure
+            authData = backendResponse.data.data;
+            console.log('Found authData in backendResponse.data.data (deeply nested)');
+          } else if (backendResponse?.data && (backendResponse.data.token || backendResponse.data.user)) {
+            // Handle single nested structure
+            authData = backendResponse.data;
+            console.log('Found authData in backendResponse.data');
+          } else if (backendResponse?.token || backendResponse?.user) {
+            // Fallback: if the response is already the AuthResponse
+            authData = backendResponse;
+            console.log('Using backendResponse directly as authData');
+          } else {
+            console.error('Could not find auth data in response');
+            return null;
+          }
+          
+          console.log('Final authData:', authData);
+          console.log('authData keys:', authData ? Object.keys(authData) : 'none');
+          
+          // SpringBoot AuthResponse format: { token, refreshToken, tokenType, expiresIn, user: {...} }
+          const token = authData?.token;
+          const refreshToken = authData?.refreshToken;
+          const userData = authData?.user;
+          
+          console.log('Extracted Spring Boot AuthResponse:', authData);
+          console.log('Extracted token:', token ? 'present' : 'missing');
+          console.log('Extracted refreshToken:', refreshToken ? 'present' : 'missing');
+          console.log('Extracted user:', userData);
+          
+          console.log('Login response token:', token ? 'present' : 'missing');
+          console.log('Login response refreshToken:', refreshToken ? 'present' : 'missing');
+          if (token) {
+            console.log('Token preview:', token.substring(0, 50) + '...');
+          }
           console.log('Login response userData:', userData);
           console.log('userData type:', typeof userData);
           console.log('userData keys:', userData ? Object.keys(userData) : 'none');
           
           // Convert backend user format to frontend user format
+          // Validate that we have user data
+          if (!userData) {
+            console.error('No user data in auth response');
+            return null;
+          }
+          
           console.log('Raw role from backend:', userData.role, 'type:', typeof userData.role);
           console.log('All userData properties:');
           for (const [key, value] of Object.entries(userData)) {
             console.log(`  ${key}:`, value, `(${typeof value})`);
           }
           
+          // Ensure we have required fields
+          if (!userData.id || !userData.username || !userData.role) {
+            console.error('Missing required user fields:', { 
+              hasId: !!userData.id, 
+              hasUsername: !!userData.username, 
+              hasRole: !!userData.role 
+            });
+            return null;
+          }
+          
           const user: User = {
             id: userData.id,
-            name: userData.name,
+            name: userData.fullName || userData.name || userData.username, // Backend returns fullName
             username: userData.username,
             password: '', // Don't store password
             role: userData.role as Role,
-            active: userData.active,
+            active: userData.isEnabled !== undefined ? userData.isEnabled : (userData.enabled !== undefined ? userData.enabled : true), // Backend returns isEnabled
             employeeId: userData.employeeId,
             institutionId: userData.institutionId,
-            institution: userData.institution,
+            institution: userData.institutionName ? { id: userData.institutionId, name: userData.institutionName } : userData.institution,
             // Convert dates to strings for proper serialization
             createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
-            updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+            updatedAt: userData.lastLoginDate ? new Date(userData.lastLoginDate) : new Date(),
           };
           
           console.log('Constructed user object:');
@@ -92,12 +158,17 @@ export const useAuthStore = create<AuthState>()(
           const userRole = user.role;
           console.log('Setting auth state - user role extracted:', userRole);
           
+          // Update API client with the token
+          if (token) {
+            apiClient.setToken(token);
+          }
+          
           set({ 
             user, 
             role: userRole, 
             isAuthenticated: true,
-            accessToken: null, // No JWT tokens in session-based auth
-            refreshToken: null,
+            accessToken: token || null,
+            refreshToken: refreshToken || null,
           });
           
           // Verify the state was set correctly
@@ -105,7 +176,9 @@ export const useAuthStore = create<AuthState>()(
           console.log('Auth state after setting:', { 
             userId: newState.user?.id, 
             role: newState.role, 
-            isAuthenticated: newState.isAuthenticated 
+            isAuthenticated: newState.isAuthenticated,
+            hasAccessToken: !!newState.accessToken,
+            tokenPreview: newState.accessToken ? newState.accessToken.substring(0, 50) + '...' : 'none'
           });
           
           return user;
@@ -194,6 +267,17 @@ export const useAuthStore = create<AuthState>()(
           username: currentState.user?.username
         });
         
+        // Clear inconsistent auth state - if authenticated but no user data
+        if (currentState.isAuthenticated && (!currentState.user || !currentState.role)) {
+          console.log('Clearing inconsistent auth state - authenticated but no user/role data');
+          set({ user: null, role: null, isAuthenticated: false });
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+          }
+          return;
+        }
+        
         // Clear stale development data
         if (currentState.user?.name === 'System Administrator') {
           console.log('Clearing stale development user data');
@@ -248,6 +332,8 @@ export const useAuthStore = create<AuthState>()(
           user: serializableUser,
           role: state.role,
           isAuthenticated: state.isAuthenticated,
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
         };
         
         console.log('State being persisted:', persistedState);
@@ -264,7 +350,9 @@ export const useAuthStore = create<AuthState>()(
               userRole: state.user?.role,
               isAuthenticated: state.isAuthenticated,
               userId: state.user?.id,
-              username: state.user?.username
+              username: state.user?.username,
+              hasAccessToken: !!state.accessToken,
+              hasRefreshToken: !!state.refreshToken
             });
             
             // Restore Date objects from strings after rehydration
@@ -275,6 +363,12 @@ export const useAuthStore = create<AuthState>()(
               if (typeof state.user.updatedAt === 'string') {
                 state.user.updatedAt = new Date(state.user.updatedAt);
               }
+            }
+            
+            // Restore token to API client after rehydration
+            if (state.accessToken) {
+              apiClient.setToken(state.accessToken);
+              console.log('Restored access token to API client');
             }
             
             // Check for role mismatch between state.role and state.user.role

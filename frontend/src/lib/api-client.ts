@@ -140,8 +140,11 @@ class ApiClient {
   private token: string | null = null;
 
   constructor() {
-    // Use the backend URL directly from environment variable
-    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+    // Use relative URLs for Next.js proxy, or frontend URL for client-side requests
+    // This allows Next.js to proxy requests to the backend automatically
+    this.baseURL = typeof window !== 'undefined' 
+      ? '/api'  // Client-side: use relative path for Next.js proxy
+      : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'; // Server-side: direct backend URL
     
     // Load token from localStorage if available
     if (typeof window !== 'undefined') {
@@ -164,7 +167,11 @@ class ApiClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // No JWT authentication needed - using simple session-based auth
+    // Add JWT token if available - always get fresh token from localStorage
+    const currentToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : this.token;
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`;
+    }
 
     try {
       const response = await fetch(url, {
@@ -271,6 +278,7 @@ class ApiClient {
     console.log('ApiClient.login called with:', { username, passwordLength: password?.length });
     const requestBody = { username, password };
     console.log('ApiClient.login request body:', requestBody);
+    console.log('Making request to:', `${this.baseURL}/auth/login`);
     
     const result = await this.request<any>('/auth/login', {
       method: 'POST',
@@ -526,6 +534,11 @@ class ApiClient {
   // Notifications APIs
   async getNotifications(userId: string): Promise<ApiResponse<any[]>> {
     return this.request<any[]>(`/notifications?userId=${userId}`);
+  }
+
+  // Generic GET method for any endpoint
+  async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint);
   }
 
   async markNotificationsAsRead(notificationIds: string[]): Promise<ApiResponse<void>> {

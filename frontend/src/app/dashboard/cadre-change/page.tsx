@@ -17,6 +17,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { format, parseISO, differenceInYears } from 'date-fns';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { apiClient } from '@/lib/api-client';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
+import { useAuthStore } from '@/store/auth-store';
 
 interface CadreChangeRequest {
   id: string;
@@ -36,6 +40,7 @@ interface CadreChangeRequest {
 
 export default function CadreChangePage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [zanId, setZanId] = useState('');
   const [employeeDetails, setEmployeeDetails] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
@@ -44,14 +49,18 @@ export default function CadreChangePage() {
 
   const [newCadre, setNewCadre] = useState('');
   const [reasonCadreChange, setReasonCadreChange] = useState('');
-  const [certificateFile, setCertificateFile] = useState<FileList | null>(null);
+  const [certificateFile, setCertificateFile] = useState<string>('');
   const [studiedOutsideCountry, setStudiedOutsideCountry] = useState(false);
-  const [tcuFormFile, setTcuFormFile] = useState<FileList | null>(null);
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [tcuFormFile, setTcuFormFile] = useState<string>('');
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
 
   const [pendingRequests, setPendingRequests] = useState<CadreChangeRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<CadreChangeRequest | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
 
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -59,9 +68,9 @@ export default function CadreChangePage() {
 
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const [requestToCorrect, setRequestToCorrect] = useState<CadreChangeRequest | null>(null);
-  const [correctedCertificateFile, setCorrectedCertificateFile] = useState<FileList | null>(null);
-  const [correctedTcuFormFile, setCorrectedTcuFormFile] = useState<FileList | null>(null);
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
+  const [correctedCertificateFile, setCorrectedCertificateFile] = useState<string>('');
+  const [correctedTcuFormFile, setCorrectedTcuFormFile] = useState<string>('');
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
   const [correctedNewCadre, setCorrectedNewCadre] = useState('');
   const [correctedReasonCadreChange, setCorrectedReasonCadreChange] = useState('');
   const [correctedStudiedOutsideCountry, setCorrectedStudiedOutsideCountry] = useState(false);
@@ -70,6 +79,12 @@ export default function CadreChangePage() {
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
   const fetchRequests = async () => {
     if (!user || !role) return;
@@ -95,12 +110,10 @@ export default function CadreChangePage() {
   const resetFormFields = () => {
     setNewCadre('');
     setReasonCadreChange('');
-    setCertificateFile(null);
+    setCertificateFile('');
     setStudiedOutsideCountry(false);
-    setTcuFormFile(null);
-    setLetterOfRequestFile(null);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
+    setTcuFormFile('');
+    setLetterOfRequestFile('');
     const checkboxInput = document.getElementById('studiedOutsideCountryCadre') as HTMLInputElement;
     if (checkboxInput) checkboxInput.checked = false;
   };
@@ -180,11 +193,16 @@ export default function CadreChangePage() {
       return;
     }
     // Validation logic...
+    if (!letterOfRequestFile || (studiedOutsideCountry && !tcuFormFile)) {
+      toast({ title: "Submission Error", description: "Please upload all required documents.", variant: "destructive" });
+      return;
+    }
+    
     setIsSubmitting(true);
     
-    let documentsList = ['Letter of Request'];
-    if (certificateFile) documentsList.push('Certificate');
-    if (studiedOutsideCountry) documentsList.push('TCU Form');
+    let documents = [letterOfRequestFile]; // Store actual file keys
+    if (certificateFile) documents.push(certificateFile);
+    if (studiedOutsideCountry && tcuFormFile) documents.push(tcuFormFile);
     
     const payload = {
       employeeId: employeeDetails.id,
@@ -192,7 +210,7 @@ export default function CadreChangePage() {
       status: 'Pending HRMO/HHRMD Review',
       newCadre,
       reason: reasonCadreChange,
-      documents: documentsList,
+      documents: documents, // Store actual file object keys
       studiedOutsideCountry: studiedOutsideCountry,
     };
     
@@ -282,9 +300,9 @@ export default function CadreChangePage() {
     setCorrectedNewCadre(request.newCadre);
     setCorrectedReasonCadreChange(request.reason || '');
     setCorrectedStudiedOutsideCountry(request.studiedOutsideCountry || false);
-    setCorrectedCertificateFile(null);
-    setCorrectedTcuFormFile(null);
-    setCorrectedLetterOfRequestFile(null);
+    setCorrectedCertificateFile('');
+    setCorrectedTcuFormFile('');
+    setCorrectedLetterOfRequestFile('');
     setIsCorrectionModalOpen(true);
   };
 
@@ -297,9 +315,9 @@ export default function CadreChangePage() {
     }
 
     try {
-      let documentsList = ['Letter of Request'];
-      if (correctedCertificateFile) documentsList.push('Certificate');
-      if (correctedStudiedOutsideCountry) documentsList.push('TCU Form');
+      let documents = [correctedLetterOfRequestFile]; // Store actual file keys
+      if (correctedCertificateFile) documents.push(correctedCertificateFile);
+      if (correctedStudiedOutsideCountry && correctedTcuFormFile) documents.push(correctedTcuFormFile);
 
       const response = await fetch(`/api/cadre-change/${request.id}`, {
         method: 'PUT',
@@ -312,7 +330,7 @@ export default function CadreChangePage() {
           newCadre: correctedNewCadre,
           reason: correctedReasonCadreChange,
           studiedOutsideCountry: correctedStudiedOutsideCountry,
-          documents: documentsList,
+          documents: documents,
           rejectionReason: null,
           reviewedById: user.id
         }),
@@ -399,10 +417,15 @@ export default function CadreChangePage() {
                     <Label htmlFor="reasonCadreChange">Reason for Cadre Change &amp; Qualifications</Label>
                     <Textarea id="reasonCadreChange" placeholder="Explain the reason and list relevant qualifications" value={reasonCadreChange} onChange={(e) => setReasonCadreChange(e.target.value)} disabled={isSubmitting || !!eligibilityError} />
                   </div>
-                  <div>
-                    <Label htmlFor="certificateFileCadre" className="flex items-center"><Award className="mr-2 h-4 w-4 text-primary" />Upload Certificate</Label>
-                    <Input id="certificateFileCadre" type="file" onChange={(e) => setCertificateFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
-                  </div>
+                  <FileUpload
+                    label="Upload Certificate"
+                    description="Upload your qualification certificate (Optional)"
+                    accept=".pdf"
+                    value={certificateFile}
+                    onChange={(value) => setCertificateFile(value as string)}
+                    folder="cadre-change"
+                    disabled={isSubmitting || !!eligibilityError}
+                  />
                   <div className="flex items-center space-x-2">
                     <Checkbox id="studiedOutsideCountryCadre" checked={studiedOutsideCountry} onCheckedChange={(checked) => setStudiedOutsideCountry(checked as boolean)} disabled={isSubmitting || !!eligibilityError} />
                     <Label htmlFor="studiedOutsideCountryCadre" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -410,15 +433,27 @@ export default function CadreChangePage() {
                     </Label>
                   </div>
                   {studiedOutsideCountry && (
-                    <div>
-                      <Label htmlFor="tcuFormFileCadre" className="flex items-center"><ChevronsUpDown className="mr-2 h-4 w-4 text-primary" />Upload TCU Form</Label>
-                      <Input id="tcuFormFileCadre" type="file" onChange={(e) => setTcuFormFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
-                    </div>
+                    <FileUpload
+                      label="Upload TCU Form"
+                      description="TCU verification form is required for foreign studies"
+                      accept=".pdf"
+                      value={tcuFormFile}
+                      onChange={(value) => setTcuFormFile(value as string)}
+                      folder="cadre-change"
+                      disabled={isSubmitting || !!eligibilityError}
+                      required
+                    />
                   )}
-                  <div>
-                    <Label htmlFor="letterOfRequestCadre" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
-                    <Input id="letterOfRequestCadre" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting || !!eligibilityError}/>
-                  </div>
+                  <FileUpload
+                    label="Upload Letter of Request"
+                    description="Official letter requesting cadre change (Required)"
+                    accept=".pdf"
+                    value={letterOfRequestFile}
+                    onChange={(value) => setLetterOfRequestFile(value as string)}
+                    folder="cadre-change"
+                    disabled={isSubmitting || !!eligibilityError}
+                    required
+                  />
                 </div>
               </div>
             )}
@@ -432,6 +467,7 @@ export default function CadreChangePage() {
                             !newCadre || 
                             !reasonCadreChange ||
                             !letterOfRequestFile ||
+                            (studiedOutsideCountry && !tcuFormFile) ||
                             isSubmitting
                         }>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -614,17 +650,65 @@ export default function CadreChangePage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                        selectedRequest.documents.map((objectKey, index) => {
+                            const fileName = objectKey.split('/').pop() || objectKey;
+                            return (
+                                <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="link" size="sm" className="h-auto p-0" onClick={() => handlePreviewFile(objectKey)}>
+                                            Preview
+                                        </Button>
+                                        <Button variant="link" size="sm" className="h-auto p-0" onClick={() => {
+                                            const token = localStorage.getItem('accessToken');
+                                            if (token) {
+                                              fetch(`/api/files/download/${objectKey}`, {
+                                                headers: {
+                                                  'Authorization': `Bearer ${token}`
+                                                }
+                                              })
+                                              .then(response => {
+                                                if (!response.ok) {
+                                                  throw new Error('Download failed');
+                                                }
+                                                return response.blob();
+                                              })
+                                              .then(blob => {
+                                                const url = window.URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                const filename = objectKey.split('/').pop() || 'document.pdf';
+                                                a.download = filename;
+                                                document.body.appendChild(a);
+                                                a.click();
+                                                window.URL.revokeObjectURL(url);
+                                                document.body.removeChild(a);
+                                              })
+                                              .catch(error => {
+                                                console.error('Download error:', error);
+                                                toast({
+                                                  title: 'Kosa la Kupakua',
+                                                  description: 'Imeshindwa kupakia faili',
+                                                  variant: 'destructive'
+                                                });
+                                              });
+                                            } else {
+                                              toast({
+                                                title: 'Kosa la Uthibitishaji',
+                                                description: 'Huna ruhusa ya kupakia faili',
+                                                variant: 'destructive'
+                                              });
+                                            }
+                                        }}>
+                                            Download
+                                        </Button>
+                                    </div>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -716,20 +800,34 @@ export default function CadreChangePage() {
 
               <div className="space-y-4">
                 <h4 className="font-semibold text-base">Required Documents (PDF Only)</h4>
-                <div>
-                  <Label htmlFor="correctedCertificateFile" className="flex items-center mb-1"><Award className="mr-2 h-4 w-4 text-primary" />Upload Certificate (Optional)</Label>
-                  <Input id="correctedCertificateFile" type="file" onChange={(e) => setCorrectedCertificateFile(e.target.files)} accept=".pdf" />
-                </div>
+                <FileUpload
+                  label="Upload Certificate"
+                  description="Upload your qualification certificate (Optional)"
+                  accept=".pdf"
+                  value={correctedCertificateFile}
+                  onChange={(value) => setCorrectedCertificateFile(value as string)}
+                  folder="cadre-change"
+                />
                 {correctedStudiedOutsideCountry && (
-                  <div>
-                    <Label htmlFor="correctedTcuFormFile" className="flex items-center mb-1"><ChevronsUpDown className="mr-2 h-4 w-4 text-primary" />Upload TCU Form (Required)</Label>
-                    <Input id="correctedTcuFormFile" type="file" onChange={(e) => setCorrectedTcuFormFile(e.target.files)} accept=".pdf" />
-                  </div>
+                  <FileUpload
+                    label="Upload TCU Form"
+                    description="TCU verification form is required for foreign studies"
+                    accept=".pdf"
+                    value={correctedTcuFormFile}
+                    onChange={(value) => setCorrectedTcuFormFile(value as string)}
+                    folder="cadre-change"
+                    required
+                  />
                 )}
-                <div>
-                  <Label htmlFor="correctedLetterOfRequestFile" className="flex items-center mb-1"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (Required)</Label>
-                  <Input id="correctedLetterOfRequestFile" type="file" onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)} accept=".pdf" />
-                </div>
+                <FileUpload
+                  label="Upload Letter of Request"
+                  description="Official letter requesting cadre change (Required)"
+                  accept=".pdf"
+                  value={correctedLetterOfRequestFile}
+                  onChange={(value) => setCorrectedLetterOfRequestFile(value as string)}
+                  folder="cadre-change"
+                  required
+                />
               </div>
               
               {requestToCorrect.rejectionReason && (
@@ -748,6 +846,18 @@ export default function CadreChangePage() {
           </DialogContent>
         </Dialog>
       )}
+      
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }

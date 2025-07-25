@@ -15,7 +15,16 @@
       "Bash(grep:*)",
       "Bash(npx prisma generate:*)",
       "Bash(mkdir:*)",
-      "Bash(cmd /c:*)"
+      "Bash(cmd /c:*)",
+      "Bash(pg_dump:*)",
+      "Bash(set PGPASSWORD=Mamlaka2020)",
+      "Bash(copy:*)",
+      "Bash(cp:*)",
+      "Bash(npx prisma:*)",
+      "Bash(chmod:*)",
+      "Bash(start /B npm start)",
+      "Bash(start /B cmd /C \"npm start\")",
+      "Bash(start:*)"
     ],
     "deny": []
   }

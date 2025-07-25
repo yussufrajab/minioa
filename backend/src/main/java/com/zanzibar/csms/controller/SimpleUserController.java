@@ -28,6 +28,9 @@ public class SimpleUserController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    
+    @Autowired
+    private com.zanzibar.csms.service.AuthService authService;
 
     @GetMapping("/users")
     public ResponseEntity<List<Map<String, Object>>> getAllUsers() {
@@ -97,46 +100,18 @@ public class SimpleUserController {
                 return ResponseEntity.badRequest().body(error);
             }
             
-            // Simple authentication - check if user exists and is active
-            String sql = """
-                SELECT u.id, u.name, u.username, u.role, u.active, u."institutionId",
-                       u."createdAt", u."updatedAt", i.name as institution_name
-                FROM "User" u 
-                LEFT JOIN "Institution" i ON u."institutionId" = i.id
-                WHERE u.username = ? AND u.active = true
-                """;
+            // Use AuthService for proper JWT authentication
+            com.zanzibar.csms.dto.AuthRequest authRequest = new com.zanzibar.csms.dto.AuthRequest();
+            authRequest.setUsername(username);
+            authRequest.setPassword(password);
             
-            List<Map<String, Object>> users = jdbcTemplate.query(sql, new RowMapper<Map<String, Object>>() {
-                @Override
-                public Map<String, Object> mapRow(ResultSet rs, int rowNum) throws SQLException {
-                    Map<String, Object> user = new HashMap<>();
-                    user.put("id", rs.getString("id"));
-                    user.put("name", rs.getString("name"));
-                    user.put("username", rs.getString("username"));
-                    user.put("role", rs.getString("role"));
-                    user.put("active", rs.getBoolean("active"));
-                    user.put("institutionId", rs.getString("institutionId"));
-                    user.put("createdAt", rs.getTimestamp("createdAt"));
-                    user.put("updatedAt", rs.getTimestamp("updatedAt"));
-                    user.put("institution", rs.getString("institution_name"));
-                    return user;
-                }
-            }, username);
+            com.zanzibar.csms.dto.AuthResponse authResponse = authService.authenticateUser(authRequest);
             
-            if (users.isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("success", false);
-                error.put("message", "Invalid username or password");
-                return ResponseEntity.status(401).body(error);
-            }
-            
-            Map<String, Object> user = users.get(0);
-            
-            // Create response with user data
+            // Return the AuthResponse in the expected format
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("data", user);
             response.put("message", "Login successful");
+            response.put("data", authResponse);
             
             return ResponseEntity.ok(response);
             
@@ -520,6 +495,50 @@ public class SimpleUserController {
             response.put("data", new ArrayList<>());
             response.put("message", "Notifications retrieved successfully");
             
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Internal server error");
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+    
+    @PostMapping("/auth/refresh")
+    public ResponseEntity<Map<String, Object>> refreshToken(@RequestBody Map<String, String> request) {
+        try {
+            String refreshToken = request.get("refreshToken");
+            
+            if (refreshToken == null || refreshToken.trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Refresh token is required");
+                return ResponseEntity.badRequest().body(error);
+            }
+            
+            // For now, return a simple response - in production this should validate and generate new tokens
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Token refresh endpoint not fully implemented");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Internal server error");
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+    
+    @PostMapping("/auth/logout")
+    public ResponseEntity<Map<String, Object>> logout() {
+        try {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Logout successful");
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {

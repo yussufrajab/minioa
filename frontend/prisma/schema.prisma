@@ -143,11 +143,9 @@ model PromotionRequest {
 }
 
 model LwopRequest {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   status          String
   reviewStage     String
-  startDate       DateTime?
-  endDate         DateTime?
   duration        String
   reason          String
   documents       String[]
@@ -155,11 +153,13 @@ model LwopRequest {
   employeeId      String
   submittedById   String
   reviewedById    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  employee        Employee @relation(fields: [employeeId], references: [id])
-  reviewedBy      User?    @relation("ReviewedLWOPs", fields: [reviewedById], references: [id])
-  submittedBy     User     @relation("SubmittedLWOPs", fields: [submittedById], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  endDate         DateTime?
+  startDate       DateTime?
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+  reviewedBy      User?     @relation("ReviewedLWOPs", fields: [reviewedById], references: [id])
+  submittedBy     User      @relation("SubmittedLWOPs", fields: [submittedById], references: [id])
 }
 
 model CadreChangeRequest {

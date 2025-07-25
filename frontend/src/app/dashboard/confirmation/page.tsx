@@ -16,6 +16,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from '@/components/ui/textarea';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
 
 interface ConfirmationRequest {
   id: string;
@@ -37,9 +39,9 @@ export default function ConfirmationPage() {
   const [employeeToConfirm, setEmployeeToConfirm] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
   
-  const [evaluationFormFile, setEvaluationFormFile] = useState<FileList | null>(null);
-  const [ipaCertificateFile, setIpaCertificateFile] = useState<FileList | null>(null);
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [evaluationFormFile, setEvaluationFormFile] = useState<string>('');
+  const [ipaCertificateFile, setIpaCertificateFile] = useState<string>('');
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,12 +57,22 @@ export default function ConfirmationPage() {
 
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const [requestToCorrect, setRequestToCorrect] = useState<ConfirmationRequest | null>(null);
-  const [correctedEvaluationFormFile, setCorrectedEvaluationFormFile] = useState<FileList | null>(null);
-  const [correctedIpaCertificateFile, setCorrectedIpaCertificateFile] = useState<FileList | null>(null);
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
+  const [correctedEvaluationFormFile, setCorrectedEvaluationFormFile] = useState<string>('');
+  const [correctedIpaCertificateFile, setCorrectedIpaCertificateFile] = useState<string>('');
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
   const fetchRequests = async () => {
     if (!user || !role) return;
@@ -129,12 +141,10 @@ export default function ConfirmationPage() {
 
   const resetEmployeeAndForm = () => {
     setEmployeeToConfirm(null); 
-    setEvaluationFormFile(null);
-    setIpaCertificateFile(null);
-    setLetterOfRequestFile(null);
+    setEvaluationFormFile('');
+    setIpaCertificateFile('');
+    setLetterOfRequestFile('');
     setIsIpaRequired(false);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
   }
 
   const handleFetchEmployeeDetails = async () => {
@@ -202,17 +212,15 @@ export default function ConfirmationPage() {
       return;
     }
     // Validation checks...
-    const checkPdf = (fileList: FileList | null) => fileList && fileList[0] && fileList[0].type === "application/pdf";
-    if (!evaluationFormFile || !letterOfRequestFile || (isIpaRequired && !ipaCertificateFile) ||
-        !checkPdf(evaluationFormFile) || !checkPdf(letterOfRequestFile) || (isIpaRequired && !checkPdf(ipaCertificateFile))) {
-        toast({ title: "Validation Error", description: "Please check all required PDF documents are attached.", variant: "destructive" });
+    if (evaluationFormFile === '' || letterOfRequestFile === '' || (isIpaRequired && ipaCertificateFile === '')) {
+        toast({ title: "Validation Error", description: "Please check all required documents are attached.", variant: "destructive" });
         return;
     }
 
     setIsSubmitting(true);
     
-    const documentsList = ['Evaluation Form', 'Letter of Request'];
-    if (isIpaRequired) documentsList.push('IPA Certificate');
+    const documentsList = [evaluationFormFile, letterOfRequestFile];
+    if (isIpaRequired && ipaCertificateFile) documentsList.push(ipaCertificateFile);
 
     const payload = {
       employeeId: employeeToConfirm.id,
@@ -311,19 +319,19 @@ export default function ConfirmationPage() {
 
   const handleResubmit = (request: ConfirmationRequest) => {
     setRequestToCorrect(request);
-    setCorrectedEvaluationFormFile(null);
-    setCorrectedIpaCertificateFile(null);
-    setCorrectedLetterOfRequestFile(null);
+    setCorrectedEvaluationFormFile('');
+    setCorrectedIpaCertificateFile('');
+    setCorrectedLetterOfRequestFile('');
     setIsCorrectionModalOpen(true);
   };
 
   const handleConfirmResubmit = async (request: ConfirmationRequest | null) => {
     if (!request || !user) return;
 
-    if (!correctedEvaluationFormFile || !correctedLetterOfRequestFile || 
+    if (correctedEvaluationFormFile === '' || correctedLetterOfRequestFile === '' || 
         ((requestToCorrect?.employee.employmentDate && isAfter(parseISO(requestToCorrect.employee.employmentDate), new Date('2014-05-01')) || 
-          requestToCorrect?.documents.includes('IPA Certificate')) && !correctedIpaCertificateFile)) {
-      toast({ title: "Submission Error", description: "All required PDF documents must be attached.", variant: "destructive" });
+          requestToCorrect?.documents.includes('IPA Certificate')) && correctedIpaCertificateFile === '')) {
+      toast({ title: "Submission Error", description: "All required documents must be attached.", variant: "destructive" });
       return;
     }
 
@@ -338,9 +346,9 @@ export default function ConfirmationPage() {
           status: 'Pending HRMO/HHRMD Review', // Both roles can review in parallel after correction
           reviewStage: 'initial',
           documents: [
-            correctedEvaluationFormFile ? correctedEvaluationFormFile[0].name : '',
-            correctedIpaCertificateFile ? correctedIpaCertificateFile[0].name : '',
-            correctedLetterOfRequestFile ? correctedLetterOfRequestFile[0].name : '',
+            correctedEvaluationFormFile,
+            correctedIpaCertificateFile,
+            correctedLetterOfRequestFile,
           ].filter(Boolean),
           rejectionReason: null, // Clear rejection reason on resubmission
         }),
@@ -360,7 +368,19 @@ export default function ConfirmationPage() {
     }
   };
 
-  const isSubmitDisabled = !employeeToConfirm || !evaluationFormFile || (isIpaRequired && !ipaCertificateFile) || !letterOfRequestFile || isSubmitting || isAlreadyConfirmed;
+  const isSubmitDisabled = !employeeToConfirm || evaluationFormFile === '' || (isIpaRequired && ipaCertificateFile === '') || letterOfRequestFile === '' || isSubmitting || isAlreadyConfirmed;
+  
+  // Debug logging for button state
+  console.log('Submit button state:', {
+    hasEmployee: !!employeeToConfirm,
+    evaluationFormFile,
+    ipaCertificateFile,
+    letterOfRequestFile,
+    isIpaRequired,
+    isSubmitting,
+    isAlreadyConfirmed,
+    isDisabled: isSubmitDisabled
+  });
   
   const paginatedRequests = pendingRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -422,18 +442,36 @@ export default function ConfirmationPage() {
                     </p>
                   )}
                   <div>
-                    <Label htmlFor="evaluationForm" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Evaluation Form</Label>
-                    <Input id="evaluationForm" type="file" onChange={(e) => setEvaluationFormFile(e.target.files)} accept=".pdf" disabled={isSubmitting || isAlreadyConfirmed}/>
+                    <Label className="flex items-center mb-2"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Evaluation Form</Label>
+                    <FileUpload
+                      onChange={setEvaluationFormFile}
+                      folder="confirmation/evaluation-forms"
+                      accept=".pdf"
+                      maxSize={2}
+                      disabled={isSubmitting || isAlreadyConfirmed}
+                    />
                   </div>
                   {isIpaRequired && (
                     <div>
-                        <Label htmlFor="ipaCertificate" className="flex items-center"><Award className="mr-2 h-4 w-4 text-primary" />Upload IPA Certificate</Label>
-                        <Input id="ipaCertificate" type="file" onChange={(e) => setIpaCertificateFile(e.target.files)} accept=".pdf" disabled={isSubmitting || isAlreadyConfirmed}/>
+                        <Label className="flex items-center mb-2"><Award className="mr-2 h-4 w-4 text-primary" />Upload IPA Certificate</Label>
+                        <FileUpload
+                          onChange={setIpaCertificateFile}
+                          folder="confirmation/ipa-certificates"
+                          accept=".pdf"
+                          maxSize={2}
+                          disabled={isSubmitting || isAlreadyConfirmed}
+                        />
                     </div>
                   )}
                   <div>
-                    <Label htmlFor="letterOfRequest" className="flex items-center"><CheckCircle className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
-                    <Input id="letterOfRequest" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting || isAlreadyConfirmed}/>
+                    <Label className="flex items-center mb-2"><CheckCircle className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
+                    <FileUpload
+                      onChange={setLetterOfRequestFile}
+                      folder="confirmation/letters"
+                      accept=".pdf"
+                      maxSize={2}
+                      disabled={isSubmitting || isAlreadyConfirmed}
+                    />
                   </div>
                 </div>
               </div>
@@ -553,7 +591,7 @@ export default function ConfirmationPage() {
                         selectedRequest.documents.map((doc, index) => (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" /><span className="font-medium text-foreground truncate" title={doc}>{doc}</span></div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0"><a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a></Button>
+                                <Button variant="link" size="sm" className="h-auto p-0 flex-shrink-0" onClick={() => handlePreviewFile(doc)}>Preview</Button>
                             </div>
                         ))
                     ) : ( <p className="text-muted-foreground text-sm">No documents attached.</p> )}
@@ -603,19 +641,34 @@ export default function ConfirmationPage() {
                 </AlertDescription>
               </Alert>
               <div>
-                <Label htmlFor="correctedEvaluationForm" className="flex items-center mb-1"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Corrected Evaluation Form</Label>
-                <Input id="correctedEvaluationForm" type="file" onChange={(e) => setCorrectedEvaluationFormFile(e.target.files)} accept=".pdf" />
+                <Label className="flex items-center mb-2"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Corrected Evaluation Form</Label>
+                <FileUpload
+                  onChange={setCorrectedEvaluationFormFile}
+                  folder="confirmation/evaluation-forms"
+                  accept=".pdf"
+                  maxSize={2}
+                />
               </div>
               {(requestToCorrect.employee.employmentDate && isAfter(parseISO(requestToCorrect.employee.employmentDate), new Date('2014-05-01')) || 
                 requestToCorrect.documents.includes('IPA Certificate')) && (
                 <div>
-                  <Label htmlFor="correctedIpaCertificate" className="flex items-center mb-1"><Award className="mr-2 h-4 w-4 text-primary" />Upload Corrected IPA Certificate</Label>
-                  <Input id="correctedIpaCertificate" type="file" onChange={(e) => setCorrectedIpaCertificateFile(e.target.files)} accept=".pdf" />
+                  <Label className="flex items-center mb-2"><Award className="mr-2 h-4 w-4 text-primary" />Upload Corrected IPA Certificate</Label>
+                  <FileUpload
+                    onChange={setCorrectedIpaCertificateFile}
+                    folder="confirmation/ipa-certificates"
+                    accept=".pdf"
+                    maxSize={2}
+                  />
                 </div>
               )}
               <div>
-                <Label htmlFor="correctedLetterOfRequest" className="flex items-center mb-1"><CheckCircle className="mr-2 h-4 w-4 text-primary" />Upload Corrected Letter of Request</Label>
-                <Input id="correctedLetterOfRequest" type="file" onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)} accept=".pdf" />
+                <Label className="flex items-center mb-2"><CheckCircle className="mr-2 h-4 w-4 text-primary" />Upload Corrected Letter of Request</Label>
+                <FileUpload
+                  onChange={setCorrectedLetterOfRequestFile}
+                  folder="confirmation/letters"
+                  accept=".pdf"
+                  maxSize={2}
+                />
               </div>
             </div>
             <DialogFooter>
@@ -627,6 +680,14 @@ export default function ConfirmationPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={setIsPreviewModalOpen}
+        objectKey={previewObjectKey}
+        title="Document Preview"
+      />
     </div>
   );
 }

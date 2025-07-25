@@ -148,21 +148,26 @@ export async function PATCH(req: Request) {
       }
     });
 
-    // If separation request is approved by Commission, update employee status based on separation type
+    // If separation request is approved by Commission, update employee status based on current employee status
     if (updateData.status === "Approved by Commission" && updatedRequest.employee) {
-      if (updatedRequest.type === "Termination") {
-        await db.employee.update({
-          where: { id: updatedRequest.employee.id },
-          data: { status: "Terminated" }
-        });
-        console.log(`Employee ${updatedRequest.employee.name} status updated to "Terminated" after termination approval`);
-      } else if (updatedRequest.type === "Dismissal") {
-        await db.employee.update({
-          where: { id: updatedRequest.employee.id },
-          data: { status: "Dismissal" }
-        });
-        console.log(`Employee ${updatedRequest.employee.name} status updated to "Dismissal" after dismissal approval`);
+      const currentEmployeeStatus = updatedRequest.employee.status;
+      let newStatus;
+      
+      if (currentEmployeeStatus === "Confirmed") {
+        newStatus = "Dismissed";
+      } else if (currentEmployeeStatus === "Probation" || currentEmployeeStatus === "On Probation") {
+        newStatus = "Terminated";
+      } else {
+        // For other statuses, default based on separation type
+        newStatus = updatedRequest.type === "DISMISSAL" ? "Dismissed" : "Terminated";
       }
+      
+      await db.employee.update({
+        where: { id: updatedRequest.employee.id },
+        data: { status: newStatus }
+      });
+      
+      console.log(`Employee ${updatedRequest.employee.name} status updated from "${currentEmployeeStatus}" to "${newStatus}" after ${updatedRequest.type.toLowerCase()} approval`);
     }
 
     return NextResponse.json({

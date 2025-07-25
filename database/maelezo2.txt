@@ -1,0 +1,155 @@
+
+● Backend Status:
+  - ✅ Running on port 8080
+  - ✅ API endpoints are accessible
+  - ✅ Login endpoint working correctly
+  - ✅ CORS configured for all origins
+
+  The Spring Boot backend is running and responding to API requests on http://localhost:8080/api
+
+> which database thie system uses?
+
+● The system uses PostgreSQL database with the following configuration:
+
+  Database Details:
+  - Database Name: prizma (NOT csms_db)
+  - Username: postgres
+  - Password: Mamlaka2020
+  - Port: 5432 (default PostgreSQL port)
+  - Host: localhost
+
+  Connection URL:
+  postgresql://postgres:Mamlaka2020@localhost:5432/prizma
+
+  Architecture:
+  - The system uses a Dual ORM approach:
+    - Frontend: Uses Prisma ORM (Node.js/TypeScript)
+    - Backend: Uses JPA/Hibernate (Spring Boot/Java)
+  - Both ORMs connect to the same PostgreSQL database
+
+  Database Contents:
+  - 14 tables with 1,044 total records
+  - 42 institutions
+  - 162 users
+  - 174 employees
+  - All HR modules data (confirmations, promotions, complaints, etc.)
+
+  You can verify the database connection with:
+  psql -U postgres -d prizma -c "SELECT COUNT(*) FROM \"User\";"
+
+> give me a list of all commands in series to be able to take exaclty the same copy of this database including schema and data
+
+● Here's the complete series of commands to create an exact copy of the database:
+
+  1. Export Complete Database (Schema + Data)
+
+  # Create backup directory
+  mkdir -p C:\database_backup
+
+  # Export complete database with schema and data
+  pg_dump -U postgres -d prizma -F c -b -v -f C:\database_backup\prizma_complete.backup
+
+  # Alternative: Plain SQL format (easier to read/edit)
+  pg_dump -U postgres -d prizma --clean --if-exists -f C:\database_backup\prizma_complete.sql
+
+  # Export schema only
+  pg_dump -U postgres -d prizma --schema-only -f C:\database_backup\prizma_schema.sql
+
+  # Export data only (INSERT statements)
+  pg_dump -U postgres -d prizma --data-only --column-inserts -f C:\database_backup\prizma_data.sql
+
+  # Export specific tables if needed
+  pg_dump -U postgres -d prizma -t "User" -t "Employee" -t "Institution" -f C:\database_backup\prizma_core_tables.sql
+
+  2. Restore to New Database (Same or Different Server)
+
+  # Create new database
+  createdb -U postgres prizma_copy
+
+  # Restore from custom format backup
+  pg_restore -U postgres -d prizma_copy -v C:\database_backup\prizma_complete.backup
+
+  # OR restore from SQL file
+  psql -U postgres -d prizma_copy -f C:\database_backup\prizma_complete.sql
+
+  # Verify restoration
+  psql -U postgres -d prizma_copy -c "SELECT COUNT(*) FROM \"User\";"
+  psql -U postgres -d prizma_copy -c "SELECT COUNT(*) FROM \"Employee\";"
+
+  3. Copy to Another Server
+
+  # Direct server-to-server copy (if network accessible)
+  pg_dump -U postgres -h localhost -d prizma | psql -U postgres -h remote_host -d prizma
+
+  # With compression for large databases
+  pg_dump -U postgres -d prizma | gzip > prizma_backup.sql.gz
+  # On target server:
+  gunzip -c prizma_backup.sql.gz | psql -U postgres -d prizma
+
+  4. Complete Backup Script (Windows)
+
+  Create backup_prizma.bat:
+  @echo off
+  SET PGPASSWORD=Mamlaka2020
+  SET BACKUP_DIR=C:\database_backup
+  SET TIMESTAMP=%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%
+  SET TIMESTAMP=%TIMESTAMP: =0%
+
+  echo Creating backup directory...
+  mkdir %BACKUP_DIR% 2>nul
+
+  echo Backing up database prizma...
+  pg_dump -U postgres -d prizma -F c -b -v -f %BACKUP_DIR%\prizma_%TIMESTAMP%.backup
+  pg_dump -U postgres -d prizma --clean --if-exists -f %BACKUP_DIR%\prizma_%TIMESTAMP%.sql
+
+  echo Backup completed: %BACKUP_DIR%\prizma_%TIMESTAMP%.backup
+
+  5. Complete Restore Script (Windows)
+
+  Create restore_prizma.bat:
+  @echo off
+  SET PGPASSWORD=Mamlaka2020
+  SET /p BACKUP_FILE=Enter backup file path:
+  SET /p NEW_DB=Enter new database name (or press Enter for 'prizma'):
+
+  IF "%NEW_DB%"=="" SET NEW_DB=prizma
+
+  echo Creating database %NEW_DB%...
+  createdb -U postgres %NEW_DB%
+
+  echo Restoring from %BACKUP_FILE%...
+  pg_restore -U postgres -d %NEW_DB% -v %BACKUP_FILE%
+
+  echo Restore completed to database: %NEW_DB%
+
+  6. Using Prisma-based Export (Alternative)
+
+  If you want to use the Prisma-based export we created earlier:
+  # Navigate to database folder
+  cd C:\hamisho\project_csms\database
+
+  # Run the export script
+  node backup-data.js
+
+  # Files created:
+  # - csms-data-export.json (JSON format)
+  # - csms-data-export.sql (SQL INSERT statements)
+  # - schema-backup.sql (Complete schema)
+
+  # To restore:
+  psql -U postgres -c "CREATE DATABASE prizma_new;"
+  psql -U postgres -d prizma_new -f schema-backup.sql
+  psql -U postgres -d prizma_new -f csms-data-export.sql
+
+  Quick One-Liner for Exact Copy
+
+  # Windows PowerShell
+  $env:PGPASSWORD='Mamlaka2020'; pg_dump -U postgres -d prizma | psql -U postgres -d prizma_copy
+
+  Important Notes:
+
+  - Password will be prompted unless you set PGPASSWORD environment variable
+  - Use -F c for custom format (smaller, faster restore)
+  - Use --column-inserts for more portable SQL
+  - Add -v for verbose output to monitor progress
+  - The database has 1,044 records across 14 tables

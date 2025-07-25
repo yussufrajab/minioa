@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from '@/components/ui/textarea';
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
+import { useAuthStore } from '@/store/auth-store';
 
 interface RetirementRequest {
   id: string;
@@ -40,6 +43,7 @@ const VOLUNTARY_RETIREMENT_AGE = 55;
 
 export default function RetirementPage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [zanId, setZanId] = useState('');
   const [employeeDetails, setEmployeeDetails] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
@@ -49,14 +53,14 @@ export default function RetirementPage() {
   const [retirementType, setRetirementType] = useState('');
   const [retirementDate, setRetirementDate] = useState('');
   const [illnessDescription, setIllnessDescription] = useState('');
-  const [medicalFormFile, setMedicalFormFile] = useState<FileList | null>(null);
-  const [illnessLeaveLetterFile, setIllnessLeaveLetterFile] = useState<FileList | null>(null);
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [medicalFormFile, setMedicalFormFile] = useState<string>('');
+  const [illnessLeaveLetterFile, setIllnessLeaveLetterFile] = useState<string>('');
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
   const [minRetirementDate, setMinRetirementDate] = useState('');
   const [ageEligibilityError, setAgeEligibilityError] = useState<string | null>(null);
 
   const [delayReason, setDelayReason] = useState('');
-  const [delayDocumentFile, setDelayDocumentFile] = useState<FileList | null>(null);
+  const [delayDocumentFile, setDelayDocumentFile] = useState<string>('');
   const [showDelayFields, setShowDelayFields] = useState(false);
 
   const [pendingRequests, setPendingRequests] = useState<RetirementRequest[]>([]);
@@ -73,15 +77,25 @@ export default function RetirementPage() {
   const [correctedRetirementDate, setCorrectedRetirementDate] = useState('');
   const [correctedIllnessDescription, setCorrectedIllnessDescription] = useState('');
   const [correctedDelayReason, setCorrectedDelayReason] = useState('');
-  const [correctedMedicalFormFile, setCorrectedMedicalFormFile] = useState<FileList | null>(null);
-  const [correctedIllnessLeaveLetterFile, setCorrectedIllnessLeaveLetterFile] = useState<FileList | null>(null);
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
-  const [correctedDelayDocumentFile, setCorrectedDelayDocumentFile] = useState<FileList | null>(null);
+  const [correctedMedicalFormFile, setCorrectedMedicalFormFile] = useState<string>('');
+  const [correctedIllnessLeaveLetterFile, setCorrectedIllnessLeaveLetterFile] = useState<string>('');
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
+  const [correctedDelayDocumentFile, setCorrectedDelayDocumentFile] = useState<string>('');
   const [correctedAgeEligibilityError, setCorrectedAgeEligibilityError] = useState<string | null>(null);
   const [showCorrectedDelayFields, setShowCorrectedDelayFields] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
 
   useEffect(() => {
     const sixMonthsFromNow = addMonths(new Date(), 6);
@@ -162,15 +176,13 @@ export default function RetirementPage() {
     setRetirementType('');
     setRetirementDate('');
     setIllnessDescription('');
-    setMedicalFormFile(null);
-    setIllnessLeaveLetterFile(null);
-    setLetterOfRequestFile(null);
+    setMedicalFormFile('');
+    setIllnessLeaveLetterFile('');
+    setLetterOfRequestFile('');
     setAgeEligibilityError(null);
     setDelayReason('');
-    setDelayDocumentFile(null);
+    setDelayDocumentFile('');
     setShowDelayFields(false);
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => (input as HTMLInputElement).value = '');
   };
 
   const handleFetchEmployeeDetails = async () => {
@@ -228,19 +240,49 @@ export default function RetirementPage() {
       toast({ title: "Submission Error", description: "Employee or user details are missing.", variant: "destructive" });
       return;
     }
-    // Validation checks...
+    
+    // Validation checks
+    if (!retirementType) {
+      toast({ title: "Submission Error", description: "Please select a retirement type.", variant: "destructive" });
+      return;
+    }
+    
+    if (!retirementDate) {
+      toast({ title: "Submission Error", description: "Please select a retirement date.", variant: "destructive" });
+      return;
+    }
+    
+    if (!letterOfRequestFile) {
+      toast({ title: "Submission Error", description: "Please upload the letter of request.", variant: "destructive" });
+      return;
+    }
+    
+    if (retirementType === 'illness') {
+      if (!medicalFormFile) {
+        toast({ title: "Submission Error", description: "Please upload the medical form for illness retirement.", variant: "destructive" });
+        return;
+      }
+      if (!illnessDescription) {
+        toast({ title: "Submission Error", description: "Please describe the illness.", variant: "destructive" });
+        return;
+      }
+    }
+    
     setIsSubmitting(true);
     
-    let documentsList = ['Letter of Request'];
+    // Build the documents array with object keys
+    const documentObjectKeys: string[] = [];
+    if (letterOfRequestFile) documentObjectKeys.push(letterOfRequestFile);
+    
     if (retirementType === 'illness') {
-        documentsList.push('Medical Form', 'Leave Due to Illness Letter');
-    } else if (retirementType === 'compulsory') {
-        documentsList.push('Birth Certificate Copy (or equivalent)');
-    } else if (retirementType === 'voluntary') {
-        documentsList.push('Service Record Summary');
+        if (medicalFormFile) documentObjectKeys.push(medicalFormFile);
+        if (illnessLeaveLetterFile) documentObjectKeys.push(illnessLeaveLetterFile);
     }
-    if (showDelayFields) {
-        documentsList.push('Delay Justification Document');
+    // For compulsory and voluntary retirement, only letter of request is required
+    // Birth certificate and service record files are not implemented in the UI
+    
+    if (showDelayFields && delayDocumentFile) {
+        documentObjectKeys.push(delayDocumentFile);
     }
 
     const payload = {
@@ -251,8 +293,11 @@ export default function RetirementPage() {
       illnessDescription: retirementType === 'illness' ? illnessDescription : undefined,
       delayReason: showDelayFields ? delayReason : undefined,
       proposedDate: new Date(retirementDate).toISOString(),
-      documents: documentsList,
+      documents: documentObjectKeys,
     };
+    
+    console.log('[RETIREMENT] Submission payload:', payload);
+    console.log('[RETIREMENT] Document keys:', documentObjectKeys);
     
     try {
         const response = await fetch('/api/retirement', {
@@ -278,18 +323,18 @@ export default function RetirementPage() {
     !employeeDetails || 
     !retirementType || 
     !retirementDate || 
-    !letterOfRequestFile || 
-    (retirementType === 'illness' && (!medicalFormFile || !illnessLeaveLetterFile || !illnessDescription)) || 
-    (showDelayFields && (!delayReason.trim() || !delayDocumentFile)) ||
+    letterOfRequestFile === '' || 
+    (retirementType === 'illness' && (medicalFormFile === '' || illnessLeaveLetterFile === '' || !illnessDescription)) || 
+    (showDelayFields && (!delayReason.trim() || delayDocumentFile === '')) ||
     (ageEligibilityError && !showDelayFields) ||
     isSubmitting;
   
   const handleUpdateRequest = async (requestId: string, payload: any) => {
     try {
-        const response = await fetch(`/api/retirement/${requestId}`, {
-            method: 'PUT',
+        const response = await fetch(`/api/retirement`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({...payload, reviewedById: user?.id })
+            body: JSON.stringify({id: requestId, ...payload, reviewedById: user?.id })
         });
         if (!response.ok) throw new Error('Failed to update request');
         await fetchRequests();
@@ -351,10 +396,10 @@ export default function RetirementPage() {
     setCorrectedRetirementDate(request.proposedDate);
     setCorrectedIllnessDescription(request.illnessDescription || '');
     setCorrectedDelayReason(request.delayReason || '');
-    setCorrectedMedicalFormFile(null);
-    setCorrectedIllnessLeaveLetterFile(null);
-    setCorrectedLetterOfRequestFile(null);
-    setCorrectedDelayDocumentFile(null);
+    setCorrectedMedicalFormFile('');
+    setCorrectedIllnessLeaveLetterFile('');
+    setCorrectedLetterOfRequestFile('');
+    setCorrectedDelayDocumentFile('');
     setIsCorrectionModalOpen(true);
   };
 
@@ -380,12 +425,16 @@ export default function RetirementPage() {
     }
 
     try {
-      let documentsList = ['Letter of Request'];
+      // Build the corrected documents array with object keys
+      const correctedDocumentObjectKeys: string[] = [];
+      if (correctedLetterOfRequestFile) correctedDocumentObjectKeys.push(correctedLetterOfRequestFile);
+      
       if (correctedRetirementType === 'illness') {
-        documentsList.push('Medical Form');
-        if (correctedIllnessLeaveLetterFile) documentsList.push('Illness Leave Letter');
+        if (correctedMedicalFormFile) correctedDocumentObjectKeys.push(correctedMedicalFormFile);
+        if (correctedIllnessLeaveLetterFile) correctedDocumentObjectKeys.push(correctedIllnessLeaveLetterFile);
       }
-      if (correctedDelayDocumentFile) documentsList.push('Delay Document');
+      
+      if (correctedDelayDocumentFile) correctedDocumentObjectKeys.push(correctedDelayDocumentFile);
 
       // Convert date string to ISO-8601 DateTime format
       const proposedDateTime = new Date(correctedRetirementDate).toISOString();
@@ -397,17 +446,17 @@ export default function RetirementPage() {
         proposedDate: proposedDateTime,
         illnessDescription: correctedRetirementType === 'illness' ? correctedIllnessDescription : null,
         delayReason: correctedDelayReason || null,
-        documents: documentsList,
+        documents: correctedDocumentObjectKeys,
         rejectionReason: null,
         reviewedById: user.id
       };
 
-      const response = await fetch(`/api/retirement/${request.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/retirement`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({id: request.id, ...payload}),
       });
 
       if (!response.ok) {
@@ -512,12 +561,26 @@ export default function RetirementPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="medicalFormFile" className="flex items-center"><Stethoscope className="mr-2 h-4 w-4 text-primary" />Upload Medical Form</Label>
-                        <Input id="medicalFormFile" type="file" onChange={(e) => setMedicalFormFile(e.target.files)} accept=".pdf" disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}/>
+                        <Label htmlFor="medicalFormFile" className="flex items-center"><Stethoscope className="mr-2 h-4 w-4 text-primary" />Upload Medical Form (Required, PDF Only)</Label>
+                        <FileUpload
+                          folder="retirement"
+                          value={medicalFormFile}
+                          onChange={setMedicalFormFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}
+                          required
+                        />
                       </div>
                       <div>
-                        <Label htmlFor="illnessLeaveLetterFile" className="flex items-center"><ClipboardCheck className="mr-2 h-4 w-4 text-primary" />Upload Leave Due to Illness Letter</Label>
-                        <Input id="illnessLeaveLetterFile" type="file" onChange={(e) => setIllnessLeaveLetterFile(e.target.files)} accept=".pdf" disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}/>
+                        <Label htmlFor="illnessLeaveLetterFile" className="flex items-center"><ClipboardCheck className="mr-2 h-4 w-4 text-primary" />Upload Leave Due to Illness Letter (Required, PDF Only)</Label>
+                        <FileUpload
+                          folder="retirement"
+                          value={illnessLeaveLetterFile}
+                          onChange={setIllnessLeaveLetterFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}
+                          required
+                        />
                       </div>
                     </>
                   )}
@@ -544,16 +607,30 @@ export default function RetirementPage() {
                       <div>
                         <Label htmlFor="delayDocumentFile" className="flex items-center">
                           <FileText className="mr-2 h-4 w-4 text-primary" />
-                          Upload Supporting Document for Delay (e.g., Extension Letter)
+                          Upload Supporting Document for Delay (e.g., Extension Letter) (Required, PDF Only)
                         </Label>
-                        <Input id="delayDocumentFile" type="file" onChange={(e) => setDelayDocumentFile(e.target.files)} accept=".pdf" disabled={isSubmitting} />
+                        <FileUpload
+                          folder="retirement"
+                          value={delayDocumentFile}
+                          onChange={setDelayDocumentFile}
+                          onPreview={handlePreviewFile}
+                          disabled={isSubmitting}
+                          required
+                        />
                       </div>
                     </div>
                   )}
 
                   <div>
-                    <Label htmlFor="letterOfRequestRetirement" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request</Label>
-                    <Input id="letterOfRequestRetirement" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}/>
+                    <Label htmlFor="letterOfRequestRetirement" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (Required, PDF Only)</Label>
+                    <FileUpload
+                      folder="retirement"
+                      value={letterOfRequestFile}
+                      onChange={setLetterOfRequestFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting || (ageEligibilityError && !showDelayFields)}
+                      required
+                    />
                   </div>
                    <p className="text-xs text-muted-foreground">
                     Note: Proposed retirement date must be at least 6 months from today. Age validation is based on the proposed retirement date.
@@ -754,17 +831,71 @@ export default function RetirementPage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
+                        selectedRequest.documents.map((objectKey, index) => {
+                          const fileName = objectKey.split('/').pop() || objectKey;
+                          return (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                                    <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handlePreviewFile(objectKey)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const headers: HeadersInit = {};
+                                        if (accessToken) {
+                                          headers['Authorization'] = `Bearer ${accessToken}`;
+                                        }
+                                        
+                                        const response = await fetch(`/api/files/download/${objectKey}`, {
+                                          credentials: 'include',
+                                          headers
+                                        });
+                                        if (response.ok) {
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = fileName;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        } else {
+                                          toast({
+                                            title: 'Download Failed',
+                                            description: 'Could not download the file. Please try again.',
+                                            variant: 'destructive'
+                                          });
+                                        }
+                                      } catch (error) {
+                                        console.error('Download failed:', error);
+                                        toast({
+                                          title: 'Download Failed',
+                                          description: 'Could not download the file. Please try again.',
+                                          variant: 'destructive'
+                                        });
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Download
+                                  </Button>
+                                </div>
                             </div>
-                        ))
+                          );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -936,6 +1067,18 @@ export default function RetirementPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }

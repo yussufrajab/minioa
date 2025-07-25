@@ -1,135 +1,219 @@
 
-> nextn@0.1.0 dev
-> next dev -p 9002
+> nextn@0.1.0 start
+> next start -p 9002
 
    ▲ Next.js 15.2.3
    - Local:        http://localhost:9002
-   - Network:      http://192.168.43.249:9002
-   - Environments: .env
+   - Network:      http://172.24.160.1:9002
 
  ✓ Starting...
- ✓ Ready in 2.1s
- ○ Compiling / ...
- ✓ Compiled / in 1316ms (812 modules)
- GET / 200 in 1732ms
- ✓ Compiled in 576ms (355 modules)
- ✓ Compiled /login in 392ms (895 modules)
- GET /login 200 in 556ms
- ✓ Compiled /_not-found in 238ms (899 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 314ms
- ✓ Compiled /favicon.ico in 135ms (552 modules)
- GET /favicon.ico 200 in 424ms
- GET /favicon.ico 200 in 222ms
- GET /login 200 in 73ms
- GET /login 200 in 56ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 48ms
- GET /favicon.ico 200 in 231ms
- GET /favicon.ico 200 in 228ms
- ✓ Compiled / in 139ms (540 modules)
- GET / 200 in 243ms
- GET /login 200 in 39ms
- ✓ Compiled /_not-found in 405ms (918 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 463ms
- ✓ Compiled /favicon.ico in 93ms (557 modules)
- GET /favicon.ico 200 in 370ms
- GET /favicon.ico 200 in 221ms
- GET /login 200 in 113ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 31ms
- GET /favicon.ico 200 in 227ms
- GET /favicon.ico 200 in 225ms
- ○ Compiling /dashboard ...
- ✓ Compiled /dashboard in 990ms (1206 modules)
- GET /dashboard 200 in 1128ms
- ✓ Compiled in 273ms (520 modules)
- GET /dashboard 200 in 58ms
- GET /dashboard 200 in 18ms
-(node:371376) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
-(Use `node --trace-deprecation ...` to show where the warning was created)
- GET /dashboard 200 in 86ms
- ✓ Compiled /_not-found in 265ms (1196 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 361ms
- ✓ Compiled /favicon.ico in 118ms (703 modules)
- GET /favicon.ico 200 in 399ms
- GET /favicon.ico 200 in 224ms
- GET /dashboard 200 in 112ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
- GET /favicon.ico 200 in 230ms
- GET /favicon.ico 200 in 218ms
- ✓ Compiled / in 156ms (708 modules)
- GET / 200 in 235ms
- GET /login 200 in 43ms
- GET /login 200 in 23ms
- GET /dashboard 200 in 16ms
- GET / 200 in 21ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
- GET /login 200 in 45ms
- GET /login 200 in 42ms
- GET /dashboard 200 in 15ms
- GET /dashboard 200 in 68ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 55ms
- GET /favicon.ico 200 in 220ms
- GET /favicon.ico 200 in 224ms
- ✓ Compiled in 402ms (1206 modules)
- ⚠ Fast Refresh had to perform a full reload due to a runtime error.
- ⚠ Fast Refresh had to perform a full reload due to a runtime error.
- ✓ Compiled in 269ms (520 modules)
- GET /dashboard 200 in 254ms
- GET /dashboard 200 in 50ms
- ⚠ Fast Refresh had to perform a full reload due to a runtime error.
- ✓ Compiled /_not-found in 165ms (1196 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 226ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 22ms
- ✓ Compiled /favicon.ico in 79ms (703 modules)
- GET /favicon.ico 200 in 357ms
- GET /login 200 in 228ms
- GET /favicon.ico 200 in 94ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 28ms
- GET /login 200 in 117ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 30ms
- GET /favicon.ico 200 in 214ms
- GET /favicon.ico 200 in 222ms
- GET /favicon.ico 200 in 220ms
- GET /favicon.ico 200 in 238ms
- GET /dashboard 200 in 45ms
- GET /login 200 in 40ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 25ms
- GET /dashboard 200 in 15ms
- GET /login 200 in 41ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 57ms
- GET /login 200 in 46ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 46ms
- GET /favicon.ico 200 in 229ms
- GET /favicon.ico 200 in 224ms
- GET /dashboard 200 in 12ms
- GET /login 200 in 31ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 34ms
- ○ Compiling /employee-login ...
- ✓ Compiled /employee-login in 766ms (1240 modules)
- GET /employee-login 200 in 974ms
- GET /login 200 in 235ms
- ✓ Compiled in 261ms (528 modules)
- GET /employee-login 200 in 87ms
- GET /login 200 in 46ms
- GET /employee-login 200 in 22ms
- GET /favicon.ico 200 in 226ms
- GET /login 200 in 17ms
- GET /dashboard 200 in 22ms
- GET /login 200 in 124ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 40ms
- ✓ Compiled in 574ms (1220 modules)
- GET /login 200 in 107ms
- GET /login 200 in 21ms
- ✓ Compiled /favicon.ico in 79ms (711 modules)
- GET /favicon.ico 200 in 356ms
- ✓ Compiled in 203ms (1222 modules)
- ✓ Compiled in 302ms (1222 modules)
- GET /dashboard 200 in 90ms
- GET /login 200 in 92ms
- ○ Compiling /_not-found ...
- ✓ Compiled /_not-found in 673ms (1224 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 777ms
- GET /login 200 in 135ms
- GET /dashboard 200 in 19ms
- GET /login 200 in 37ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 32ms
-[?25h
+ ✓ Ready in 742ms
+=== TEST API CALLED ===
+=== Dashboard metrics API called ===
+Total employees: 174
+Pending confirmations: 0
+Pending promotions: 0
+Employees on LWOP: 2
+Pending terminations: 0
+Open complaints: 16
+Pending cadre changes: 11
+Pending retirements: 14
+Pending resignations: 11
+Pending service extensions: 7
+=== Dashboard metrics calculated === {
+  totalEmployees: 174,
+  pendingConfirmations: 12,
+  pendingPromotions: 8,
+  employeesOnLwop: 2,
+  pendingTerminations: 3,
+  openComplaints: 16,
+  pendingCadreChanges: 11,
+  pendingRetirements: 14,
+  pendingResignations: 11,
+  pendingServiceExtensions: 7
+}
+=== Recent activities count === 5
+=== Final API response === {
+  "success": true,
+  "data": {
+    "stats": {
+      "totalEmployees": 174,
+      "pendingConfirmations": 12,
+      "pendingPromotions": 8,
+      "employeesOnLwop": 2,
+      "pendingTerminations": 3,
+      "openComplaints": 16,
+      "pendingCadreChanges": 11,
+      "pendingRetirements": 14,
+      "pendingResignations": 11,
+      "pendingServiceExtensions": 7
+    },
+    "recentActivities": [
+      {
+        "id": "cmdf3opqb0007e6lcw1etegn1",
+        "type": "Dismissal",
+        "employee": "Hamza Khamis Maalim",
+        "status": "Approved by Commission",
+        "updatedAt": "2025-07-22T22:23:47.722Z",
+        "href": "/dashboard/termination"
+      },
+      {
+        "id": "cmdf3jyjk0005e6lcqhdswe06",
+        "type": "Termination",
+        "employee": "Ali Hassan Haji",
+        "status": "Approved by Commission",
+        "updatedAt": "2025-07-22T22:20:57.635Z",
+        "href": "/dashboard/termination"
+      },
+      {
+        "id": "cmdf365yd0003e6lc3gzcs74w",
+        "type": "Dismissal",
+        "employee": "Khalid Juma Ali",
+        "status": "Approved by Commission",
+        "updatedAt": "2025-07-22T22:08:57.983Z",
+        "href": "/dashboard/termination"
+      },
+      {
+        "id": "cmdf32bir0001e6lcaq6m1i6s",
+        "type": "Service Extension",
+        "employee": "Khalid Juma Ali",
+        "status": "Approved by Commission",
+        "updatedAt": "2025-07-22T22:07:04.500Z",
+        "href": "/dashboard/service-extension"
+      },
+      {
+        "id": "cmdf2n6i60003e6lonqa65v28",
+        "type": "Resignation",
+        "employee": "Maryam Othman Khamis",
+        "status": "Rejected by Commission - Request Concluded",
+        "updatedAt": "2025-07-22T21:54:18.579Z",
+        "href": "/dashboard/resignation"
+      }
+    ]
+  }
+}
+Urgent actions API called with: { userRole: null, userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x' }
+Role null is a CSC role - showing urgent actions for all institutions
+Found 15 employees needing urgent actions
+Employees API called with params: {
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x',
+  q: '',
+  status: null,
+  gender: null,
+  page: 1,
+  size: 1000
+}
+Applying institution filter for role: HRO
+Found 30 employees out of 30 total
+Employees API called with params: {
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x',
+  q: '',
+  status: null,
+  gender: null,
+  page: 1,
+  size: 1000
+}
+Applying institution filter for role: HRO
+Found 30 employees out of 30 total
+Confirmations API called with: { userId: 'cmd06nnbn000le67wtg41s3su', userRole: 'HRO' }
+LWOP API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Promotions API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Found 17 promotion requests
+Cadre Change API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Retirement API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Resignation API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Service Extension API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Termination API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Track requests API called with: {
+  institutionName: null,
+  requestType: null,
+  status: null,
+  page: 1,
+  limit: 20
+}
+Track requests API called with: {
+  institutionName: null,
+  requestType: null,
+  status: null,
+  page: 1,
+  limit: 20
+}
+Termination API called with: {
+  userId: 'cmd06nnbn000le67wtg41s3su',
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x'
+}
+Applying institution filter for role HRO with institutionId cmd06nn7n0001e67w2h5rf86x
+Employees API called with params: {
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x',
+  q: '',
+  status: null,
+  gender: null,
+  page: 1,
+  size: 1000
+}
+Applying institution filter for role: HRO
+Found 30 employees out of 30 total
+Employees API called with params: {
+  userRole: 'HRO',
+  userInstitutionId: 'cmd06nn7n0001e67w2h5rf86x',
+  q: '',
+  status: null,
+  gender: null,
+  page: 1,
+  size: 1000
+}
+Applying institution filter for role: HRO
+Found 30 employees out of 30 total
+Track requests API called with: {
+  institutionName: null,
+  requestType: null,
+  status: null,
+  page: 1,
+  limit: 20
+}
+Track requests API called with: {
+  institutionName: null,
+  requestType: null,
+  status: null,
+  page: 1,
+  limit: 20
+}

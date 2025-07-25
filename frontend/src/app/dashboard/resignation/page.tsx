@@ -15,6 +15,10 @@ import { Loader2, Search, FileText, CalendarDays, Paperclip } from 'lucide-react
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Pagination } from '@/components/shared/pagination';
+import { FileUpload } from '@/components/ui/file-upload';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
+import { apiClient } from '@/lib/api-client';
+import { useAuthStore } from '@/store/auth-store';
 
 interface ResignationRequest {
   id: string;
@@ -33,6 +37,7 @@ interface ResignationRequest {
 
 export default function ResignationPage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [zanId, setZanId] = useState('');
   const [employeeDetails, setEmployeeDetails] = useState<Employee | null>(null);
   const [isFetchingEmployee, setIsFetchingEmployee] = useState(false);
@@ -41,13 +46,23 @@ export default function ResignationPage() {
 
   const [effectiveDate, setEffectiveDate] = useState('');
   const [reason, setReason] = useState('');
-  const [noticeOrReceiptFile, setNoticeOrReceiptFile] = useState<FileList | null>(null);
-  const [letterOfRequestFile, setLetterOfRequestFile] = useState<FileList | null>(null);
+  const [noticeOrReceiptFile, setNoticeOrReceiptFile] = useState<string>('');
+  const [letterOfRequestFile, setLetterOfRequestFile] = useState<string>('');
   const [minEffectiveDate, setMinEffectiveDate] = useState('');
 
   const [pendingRequests, setPendingRequests] = useState<ResignationRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<ResignationRequest | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  // File preview modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // Handle file preview
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
   
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -60,8 +75,8 @@ export default function ResignationPage() {
   const [requestToCorrect, setRequestToCorrect] = useState<ResignationRequest | null>(null);
   const [correctedEffectiveDate, setCorrectedEffectiveDate] = useState('');
   const [correctedReason, setCorrectedReason] = useState('');
-  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<FileList | null>(null);
-  const [correctedNoticeOrReceiptFile, setCorrectedNoticeOrReceiptFile] = useState<FileList | null>(null);
+  const [correctedLetterOfRequestFile, setCorrectedLetterOfRequestFile] = useState<string>('');
+  const [correctedNoticeOrReceiptFile, setCorrectedNoticeOrReceiptFile] = useState<string>('');
   
   const fetchRequests = async () => {
     if (!user || !role) return;
@@ -86,8 +101,8 @@ export default function ResignationPage() {
   const resetFormFields = () => {
     setEffectiveDate('');
     setReason('');
-    setNoticeOrReceiptFile(null);
-    setLetterOfRequestFile(null);
+    setNoticeOrReceiptFile('');
+    setLetterOfRequestFile('');
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach(input => (input as HTMLInputElement).value = '');
   };
@@ -148,21 +163,23 @@ export default function ResignationPage() {
       return;
     }
     // Validation
-    if (!effectiveDate || !letterOfRequestFile || !noticeOrReceiptFile) {
+    if (!effectiveDate || letterOfRequestFile === '' || noticeOrReceiptFile === '') {
         toast({ title: "Submission Error", description: "Please fill all required fields and upload required documents.", variant: "destructive"});
         return;
     }
 
     setIsSubmitting(true);
-    const documentsList = ['Letter of Request', '3 Month Notice/Receipt'];
+    const documentObjectKeys: string[] = [];
+    if (letterOfRequestFile) documentObjectKeys.push(letterOfRequestFile);
+    if (noticeOrReceiptFile) documentObjectKeys.push(noticeOrReceiptFile);
     
     const payload = {
         employeeId: employeeDetails.id,
         submittedById: user.id,
-        status: 'Pending HRMO/HHRMD Acknowledgement',
+        status: 'Pending HRMO/HHRMD Review',
         effectiveDate: new Date(effectiveDate).toISOString(),
         reason: reason,
-        documents: documentsList
+        documents: documentObjectKeys
     };
 
     try {
@@ -189,10 +206,10 @@ export default function ResignationPage() {
   
   const handleUpdateRequest = async (requestId: string, payload: any) => {
     try {
-        const response = await fetch(`/api/resignation/${requestId}`, {
-            method: 'PUT',
+        const response = await fetch(`/api/resignation`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({...payload, reviewedById: user?.id })
+            body: JSON.stringify({id: requestId, ...payload, reviewedById: user?.id })
         });
         if (!response.ok) throw new Error('Failed to update request');
         await fetchRequests();
@@ -203,17 +220,24 @@ export default function ResignationPage() {
     }
   };
 
-  const handleAcknowledge = async (requestId: string) => {
-    let payload;
-    if (role === ROLES.HRMO) {
-      payload = { status: "Pending HHRMD Acknowledgement", reviewStage: 'HHRMD_review' };
-    } else if (role === ROLES.HHRMD) {
-      payload = { status: "Forwarded to Commission for Acknowledgment", reviewStage: 'commission_review' };
-    } else {
-      return; // Should not happen based on UI logic
+  const handleInitialAction = async (requestId: string, action: 'forward' | 'reject') => {
+    const request = pendingRequests.find(req => req.id === requestId);
+    if (!request) return;
+    
+    if (action === 'reject') {
+      setCurrentRequestToAction(request);
+      setRejectionReasonInput('');
+      setIsRejectionModalOpen(true);
+    } else if (action === 'forward') {
+      // Both HRMO and HHRMD forward directly to Commission (parallel workflow)
+      const payload = { status: "Request Received – Awaiting Commission Decision", reviewStage: 'commission_review' };
+      
+      const success = await handleUpdateRequest(requestId, payload);
+      if (success) {
+        const roleName = role === ROLES.HRMO ? 'HRMO' : 'HHRMD';
+        toast({ title: "Request Forwarded", description: `Resignation request for ${request.employee.name} approved by ${roleName} and forwarded to Commission.` });
+      }
     }
-    const success = await handleUpdateRequest(requestId, payload);
-    if(success) toast({ title: "Request Forwarded", description: "The resignation has been forwarded." });
   };
   
   const handleFlagIssue = (request: ResignationRequest) => {
@@ -250,8 +274,8 @@ export default function ResignationPage() {
     setRequestToCorrect(request);
     setCorrectedEffectiveDate(request.effectiveDate ? format(parseISO(request.effectiveDate), 'yyyy-MM-dd') : '');
     setCorrectedReason(request.reason || '');
-    setCorrectedLetterOfRequestFile(null);
-    setCorrectedNoticeOrReceiptFile(null);
+    setCorrectedLetterOfRequestFile('');
+    setCorrectedNoticeOrReceiptFile('');
     
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach(input => (input as HTMLInputElement).value = '');
@@ -265,7 +289,7 @@ export default function ResignationPage() {
       return;
     }
 
-    if (!correctedEffectiveDate || !correctedLetterOfRequestFile || !correctedNoticeOrReceiptFile) {
+    if (!correctedEffectiveDate || correctedLetterOfRequestFile === '' || correctedNoticeOrReceiptFile === '') {
       toast({ title: "Validation Error", description: "Please fill all required fields and upload required documents.", variant: "destructive" });
       return;
     }
@@ -273,11 +297,12 @@ export default function ResignationPage() {
     const documentsList = ['Letter of Request', '3 Month Notice/Receipt'];
 
     try {
-      const response = await fetch(`/api/resignation/${request.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/resignation`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          status: 'Pending HRMO/HHRMD Acknowledgement',
+          id: request.id,
+          status: 'Pending HRMO/HHRMD Review',
           reviewStage: 'initial',
           effectiveDate: new Date(correctedEffectiveDate).toISOString(),
           reason: correctedReason,
@@ -298,20 +323,9 @@ export default function ResignationPage() {
     }
   };
 
-  // Filter requests based on user role for HHRMD and HRMO
+  // Show all requests to HHRMD and HRMO (like other modules)
   const getFilteredRequests = () => {
-    if (role === ROLES.HHRMD || role === ROLES.HRMO) {
-      return pendingRequests.filter(request => {
-        // Both HHRMD and HRMO should see requests that need acknowledgement (first come, first win)
-        const isInitialStage = request.reviewStage === 'initial' || request.reviewStage === 'Initial Review';
-        const needsAcknowledgement = request.status === 'Pending HRMO Acknowledgement' || 
-                                   request.status === 'Pending HHRMD Acknowledgement' || 
-                                   request.status === 'Pending HRMO/HHRMD Acknowledgement';
-        
-        return isInitialStage && needsAcknowledgement;
-      });
-    }
-    return pendingRequests; // For other roles, show all requests
+    return pendingRequests; // Show all requests regardless of role or status
   };
 
   const filteredRequests = getFilteredRequests();
@@ -373,11 +387,25 @@ export default function ResignationPage() {
                   </div>
                   <div>
                     <Label htmlFor="letterOfRequestResignation" className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary" />Upload Letter of Request (Required, PDF Only)</Label>
-                    <Input id="letterOfRequestResignation" type="file" onChange={(e) => setLetterOfRequestFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                    <FileUpload
+                      folder="resignation"
+                      value={letterOfRequestFile}
+                      onChange={setLetterOfRequestFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting}
+                      required
+                    />
                   </div>
                   <div>
                     <Label htmlFor="noticeOrReceiptFile" className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-primary" />Upload 3 months resignation notice or receipt of resignation equal to employee’s salary (Required, PDF Only)</Label>
-                    <Input id="noticeOrReceiptFile" type="file" onChange={(e) => setNoticeOrReceiptFile(e.target.files)} accept=".pdf" disabled={isSubmitting}/>
+                    <FileUpload
+                      folder="resignation"
+                      value={noticeOrReceiptFile}
+                      onChange={setNoticeOrReceiptFile}
+                      onPreview={handlePreviewFile}
+                      disabled={isSubmitting}
+                      required
+                    />
                   </div>
                 </div>
               </div>
@@ -457,24 +485,11 @@ export default function ResignationPage() {
                   {request.rejectionReason && <p className="text-sm text-destructive"><span className="font-medium">Rejection Reason:</span> {request.rejectionReason}</p>}
                   <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                     <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(request); setIsDetailsModalOpen(true); }}>View Details</Button>
-                    {(role === ROLES.HHRMD || role === ROLES.HRMO) && (
+                    {/* HRMO/HHRMD Parallel Review Actions */}
+                    {(role === ROLES.HRMO || role === ROLES.HHRMD) && (request.status === 'Pending HRMO/HHRMD Review') && (
                       <>
-                        {/* Both HHRMD and HRMO can act on requests that need acknowledgement - first come, first win */}
-                        {(request.reviewStage === 'initial' || request.reviewStage === 'Initial Review') && 
-                         (request.status === 'Pending HRMO Acknowledgement' || request.status === 'Pending HHRMD Acknowledgement' || request.status === 'Pending HRMO/HHRMD Acknowledgement') && (
-                          <>
-                            <Button size="sm" onClick={() => handleAcknowledge(request.id)}>
-                              {role === ROLES.HRMO ? 'Acknowledge & Forward to HHRMD' : 'Acknowledge & Forward to Commission'}
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleFlagIssue(request)}>Flag Issue & Return to HRO</Button>
-                          </>
-                        )}
-                        {request.reviewStage === 'HHRMD_review' && (role === ROLES.HHRMD && request.status === 'Pending HHRMD Acknowledgement') && (
-                          <>
-                            <Button size="sm" onClick={() => handleAcknowledge(request.id)}>Acknowledge & Forward to Commission</Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleFlagIssue(request)}>Flag Issue & Return to HRO</Button>
-                          </>
-                        )}
+                        <Button size="sm" onClick={() => handleInitialAction(request.id, 'forward')}>Verify & Forward to Commission</Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleInitialAction(request.id, 'reject')}>Reject & Return to HRO</Button>
                       </>
                     )}
                     {request.reviewStage === 'commission_review' && (
@@ -578,17 +593,71 @@ export default function ResignationPage() {
                     <Label className="font-semibold">Attached Documents</Label>
                     <div className="mt-2 space-y-2">
                     {selectedRequest.documents && selectedRequest.documents.length > 0 ? (
-                        selectedRequest.documents.map((doc, index) => (
+                        selectedRequest.documents.map((objectKey, index) => {
+                          const fileName = objectKey.split('/').pop() || objectKey;
+                          return (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                                    <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">View Document</a>
-                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handlePreviewFile(objectKey)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const headers: HeadersInit = {};
+                                        if (accessToken) {
+                                          headers['Authorization'] = `Bearer ${accessToken}`;
+                                        }
+                                        
+                                        const response = await fetch(`/api/files/download/${objectKey}`, {
+                                          credentials: 'include',
+                                          headers
+                                        });
+                                        if (response.ok) {
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = fileName;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        } else {
+                                          toast({
+                                            title: 'Download Failed',
+                                            description: 'Could not download the file. Please try again.',
+                                            variant: 'destructive'
+                                          });
+                                        }
+                                      } catch (error) {
+                                        console.error('Download failed:', error);
+                                        toast({
+                                          title: 'Download Failed',
+                                          description: 'Could not download the file. Please try again.',
+                                          variant: 'destructive'
+                                        });
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Download
+                                  </Button>
+                                </div>
                             </div>
-                        ))
+                          );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">No documents were attached to this request.</p>
                     )}
@@ -667,11 +736,12 @@ export default function ResignationPage() {
                     <FileText className="mr-2 h-4 w-4 text-primary" />
                     Upload Letter of Request (Required, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedLetterOfRequest" 
-                    type="file" 
-                    onChange={(e) => setCorrectedLetterOfRequestFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="resignation"
+                    value={correctedLetterOfRequestFile}
+                    onChange={setCorrectedLetterOfRequestFile}
+                    onPreview={handlePreviewFile}
+                    required
                   />
                 </div>
                 <div>
@@ -679,11 +749,12 @@ export default function ResignationPage() {
                     <FileText className="mr-2 h-4 w-4 text-primary" />
                     Upload 3 months resignation notice or receipt (Required, PDF Only)
                   </Label>
-                  <Input 
-                    id="correctedNoticeOrReceipt" 
-                    type="file" 
-                    onChange={(e) => setCorrectedNoticeOrReceiptFile(e.target.files)} 
-                    accept=".pdf"
+                  <FileUpload
+                    folder="resignation"
+                    value={correctedNoticeOrReceiptFile}
+                    onChange={setCorrectedNoticeOrReceiptFile}
+                    onPreview={handlePreviewFile}
+                    required
                   />
                 </div>
               </div>
@@ -700,7 +771,7 @@ export default function ResignationPage() {
               </Button>
               <Button 
                 onClick={() => handleConfirmResubmit(requestToCorrect)}
-                disabled={!correctedEffectiveDate || !correctedLetterOfRequestFile || !correctedNoticeOrReceiptFile}
+                disabled={!correctedEffectiveDate || correctedLetterOfRequestFile === '' || correctedNoticeOrReceiptFile === ''}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Resubmit Corrected Request
@@ -709,6 +780,18 @@ export default function ResignationPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }

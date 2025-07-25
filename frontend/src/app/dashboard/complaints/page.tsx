@@ -43,7 +43,8 @@ const complaintSchema = z.object({
   complaintText: z.string().min(20, "Maelezo ya malalamiko lazima yawe na angalau herufi 20."),
   complainantPhoneNumber: phoneValidation,
   nextOfKinPhoneNumber: phoneValidation,
-  evidence: z.custom<FileList | null>().optional(),
+  complaintLetter: z.string().optional(),
+  evidence: z.string().optional(),
 });
 
 type ComplaintFormValues = z.infer<typeof complaintSchema>;
@@ -73,10 +74,19 @@ interface SubmittedComplaint {
 
 export default function ComplaintsPage() {
   const { role, user } = useAuth();
+  const { accessToken } = useAuthStore();
   const [rewrittenComplaint, setRewrittenComplaint] = useState<string | null>(null);
   const [isRewriting, setIsRewriting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // File preview state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewObjectKey, setPreviewObjectKey] = useState<string | null>(null);
+
+  // File upload state
+  const [complaintLetterFile, setComplaintLetterFile] = useState<string>('');
+  const [evidenceFile, setEvidenceFile] = useState<string>('');
 
   const [complaints, setComplaints] = useState<SubmittedComplaint[]>([]);
   const [selectedComplaint, setSelectedComplaint] = useState<SubmittedComplaint | null>(null);
@@ -96,6 +106,17 @@ export default function ComplaintsPage() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [selectedComplaintForInfo, setSelectedComplaintForInfo] = useState<SubmittedComplaint | null>(null);
 
+  // Employee resubmission modal  
+  const [isResubmissionModalOpen, setIsResubmissionModalOpen] = useState(false);
+  const [selectedComplaintForResubmission, setSelectedComplaintForResubmission] = useState<SubmittedComplaint | null>(null);
+
+  // Commission decision modal
+  const [isCommissionDecisionModalOpen, setIsCommissionDecisionModalOpen] = useState(false);
+  const [selectedComplaintForCommissionDecision, setSelectedComplaintForCommissionDecision] = useState<SubmittedComplaint | null>(null);
+  const [commissionDecision, setCommissionDecision] = useState('');
+  const [commissionDecisionType, setCommissionDecisionType] = useState<'resolved' | 'rejected'>('resolved');
+  const [commissionLetter, setCommissionLetter] = useState<File | null>(null);
+
 
   const form = useForm<ComplaintFormValues>({
     resolver: zodResolver(complaintSchema),
@@ -105,9 +126,15 @@ export default function ComplaintsPage() {
       complaintText: "",
       complainantPhoneNumber: "",
       nextOfKinPhoneNumber: "",
-      evidence: null,
+      complaintLetter: "",
+      evidence: "",
     },
   });
+
+  const handlePreviewFile = (objectKey: string) => {
+    setPreviewObjectKey(objectKey);
+    setIsPreviewModalOpen(true);
+  };
   
   useEffect(() => {
     const fetchComplaints = async () => {
@@ -158,15 +185,16 @@ export default function ComplaintsPage() {
     }
     setIsSubmitting(true);
     
-    // In a real app, file upload would be handled here, e.g., to a cloud storage service.
-    // For this prototype, we'll just pass the file names.
-    const attachmentNames = data.evidence ? Array.from(data.evidence).map(file => file.name) : [];
+    // Create array of uploaded document object keys
+    const documentObjectKeys: string[] = [];
+    if (complaintLetterFile) documentObjectKeys.push(complaintLetterFile);
+    if (evidenceFile) documentObjectKeys.push(evidenceFile);
     
     try {
         const response = await fetch('/api/complaints', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...data, attachments: attachmentNames, complainantId: user.id }),
+            body: JSON.stringify({ ...data, attachments: documentObjectKeys, complainantId: user.id }),
         });
         
         if (!response.ok) {
@@ -179,6 +207,8 @@ export default function ComplaintsPage() {
         toast({ title: "Lalamiko Limewasilishwa", description: "Lalamiko lako limewasilishwa kwa mafanikio." });
         form.reset();
         setRewrittenComplaint(null);
+        setComplaintLetterFile('');
+        setEvidenceFile('');
     } catch (error) {
         toast({ title: "Kuwasilisha Kumeshindikana", description: "Hitilafu imetokea wakati wa kuwasilisha lalamiko lako.", variant: "destructive" });
     } finally {
@@ -208,7 +238,7 @@ export default function ComplaintsPage() {
   };
 
 
-  const handleInitialAction = async (complaintId: string, action: 'forward' | 'reject_initial') => {
+  const handleInitialAction = async (complaintId: string, action: 'reject_initial') => {
     const complaint = complaints.find(c => c.id === complaintId);
     if (!complaint) return;
 
@@ -216,16 +246,6 @@ export default function ComplaintsPage() {
       setCurrentRequestToAction(complaint);
       setRejectionReasonInput(''); 
       setIsRejectionModalOpen(true);
-    } else if (action === 'forward') {
-      const payload = { 
-        status: "Awaiting Commission Review", 
-        reviewStage: 'commission_review', 
-        reviewedById: user?.id 
-      };
-      const updated = await handleUpdateComplaint(complaintId, payload);
-      if (updated) {
-        toast({ title: "Lalamiko Limepelekwa", description: `Lalamiko ${complaintId} limepelekwa kwa Ukaguzi wa Tume.` });
-      }
     }
   };
   
@@ -238,7 +258,7 @@ export default function ComplaintsPage() {
     const rejectedByRole = role === ROLES.DO ? "DO" : "HHRMD";
 
     const payload = {
-        status: `Rejected by ${rejectedByRole} - Awaiting HRO/Submitter Action`,
+        status: `Rejected by ${rejectedByRole} – Waiting submitter reaction`,
         rejectionReason: rejectionReasonInput,
         reviewStage: 'initial',
         reviewedById: user?.id
@@ -253,15 +273,6 @@ export default function ComplaintsPage() {
     }
   };
 
-  const handleCommissionDecision = async (complaintId: string, decision: 'commission_approve' | 'commission_reject') => {
-    const finalStatus = decision === 'commission_approve' ? "Resolved - Approved by Commission" : "Resolved - Rejected by Commission";
-    const payload = { status: finalStatus, reviewStage: 'completed', reviewedById: user?.id };
-    
-    const updated = await handleUpdateComplaint(complaintId, payload);
-    if (updated) {
-       toast({ title: `Uamuzi wa Tume: ${decision === 'commission_approve' ? 'Umekubaliwa' : 'Umekataliwa'}`, description: `Lalamiko ${complaintId} limesasishwa.` });
-    }
-  };
 
   const openActionModal = (complaint: SubmittedComplaint, type: "resolve" | "request_info") => {
     setSelectedComplaint(complaint);
@@ -310,10 +321,10 @@ export default function ComplaintsPage() {
   };
 
   const handleEmployeeConfirmOutcome = async (complaintId: string) => {
-    const payload = { status: "Closed - Satisfied" };
+    const payload = { status: "Mtumishi ameridhika na hatua" };
     const updated = await handleUpdateComplaint(complaintId, payload);
     if (updated) {
-      toast({title: "Lalamiko Limefungwa", description: "Asante kwa maoni yako."});
+      toast({title: "Thibitisho Limekamilika", description: "Asante kwa kuthibitisha. Lalamiko limekamilika."});
     }
   };
 
@@ -321,6 +332,19 @@ export default function ComplaintsPage() {
     setSelectedComplaintForInfo(complaint);
     setAdditionalInfo('');
     setIsProvideInfoModalOpen(true);
+  };
+
+  const openResubmissionModal = (complaint: SubmittedComplaint) => {
+    setSelectedComplaintForResubmission(complaint);
+    // Pre-populate form with existing complaint data
+    form.reset({
+      complaintType: complaint.complaintType,
+      subject: complaint.subject,
+      complaintText: complaint.details,
+      complainantPhoneNumber: complaint.complainantPhoneNumber || '',
+      nextOfKinPhoneNumber: complaint.nextOfKinPhoneNumber || '',
+    });
+    setIsResubmissionModalOpen(true);
   };
 
   const handleProvideAdditionalInfo = async () => {
@@ -342,6 +366,105 @@ export default function ComplaintsPage() {
       setIsProvideInfoModalOpen(false);
       setSelectedComplaintForInfo(null);
       setAdditionalInfo('');
+    }
+  };
+
+  const handleResubmitComplaint = async (data: ComplaintFormValues) => {
+    if (!selectedComplaintForResubmission) return;
+
+    setIsSubmitting(true);
+    try {
+      // Update the existing complaint with new data and reset status
+      const payload = {
+        complaintType: data.complaintType,
+        subject: data.subject,
+        details: data.complaintText,
+        complainantPhoneNumber: data.complainantPhoneNumber,
+        nextOfKinPhoneNumber: data.nextOfKinPhoneNumber,
+        status: 'Submitted',
+        rejectionReason: null, // Clear rejection reason
+        reviewStage: 'initial'
+      };
+
+      const updated = await handleUpdateComplaint(selectedComplaintForResubmission.id, payload);
+      if (updated) {
+        toast({title: "Lalamiko Limewasilishwa Upya", description: "Lalamiko lako limerekebihwa na kuwasilishwa upya kwa ukaguzi."});
+        setIsResubmissionModalOpen(false);
+        setSelectedComplaintForResubmission(null);
+        form.reset();
+        setRewrittenComplaint(null);
+      }
+    } catch (error) {
+      toast({title: "Kushindwa Kuwasilisha", description: "Imeshindwa kuwasilisha upya lalamiko.", variant: "destructive"});
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openCommissionDecisionModal = (complaint: SubmittedComplaint) => {
+    setSelectedComplaintForCommissionDecision(complaint);
+    setCommissionDecision('');
+    setCommissionDecisionType('resolved');
+    setCommissionLetter(null);
+    setIsCommissionDecisionModalOpen(true);
+  };
+
+  const handleCommissionDecision = async () => {
+    if (!selectedComplaintForCommissionDecision || !commissionDecision.trim()) {
+      toast({title: "Hitilafu", description: "Tafadhali toa maamuzi ya tume.", variant: "destructive"});
+      return;
+    }
+
+    // Require commission letter for resolved complaints
+    if (commissionDecisionType === 'resolved' && !commissionLetter) {
+      toast({title: "Hitilafu", description: "Tafadhali chagua barua ya tume kwa maamuzi yaliyotatuliwa.", variant: "destructive"});
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      let commissionLetterUrl = null;
+      
+      // Upload commission letter if provided
+      if (commissionLetter) {
+        const formData = new FormData();
+        formData.append('file', commissionLetter);
+        
+        // Note: We'll need to implement file upload endpoint, for now simulate
+        console.log('Commission letter would be uploaded:', commissionLetter.name);
+        commissionLetterUrl = `uploads/commission-letters/${commissionLetter.name}`;
+      }
+
+      const finalStatus = commissionDecisionType === 'resolved' 
+        ? 'Closed - Commission Decision (Resolved)' 
+        : 'Closed - Commission Decision (Rejected)';
+
+      const payload = {
+        status: finalStatus,
+        officerComments: commissionDecision,
+        reviewStage: 'final_decision',
+        reviewedById: user?.id,
+        // Add commission letter URL to attachments if available
+        ...(commissionLetterUrl && { 
+          attachments: [commissionLetterUrl] 
+        })
+      };
+
+      const updated = await handleUpdateComplaint(selectedComplaintForCommissionDecision.id, payload);
+      if (updated) {
+        toast({
+          title: "Maamuzi ya Tume Yamewekwa", 
+          description: `Lalamiko limefungwa rasmi. Hakuna uwezekano wa kuliwasilisha upya.`
+        });
+        setIsCommissionDecisionModalOpen(false);
+        setSelectedComplaintForCommissionDecision(null);
+        setCommissionDecision('');
+        setCommissionLetter(null);
+      }
+    } catch (error) {
+      toast({title: "Kushindwa", description: "Imeshindwa kuweka maamuzi ya tume.", variant: "destructive"});
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -378,10 +501,12 @@ export default function ComplaintsPage() {
                                 </div>
                                 <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                                     complaint.status === "Closed - Satisfied" ? "bg-green-100 text-green-700" :
+                                    complaint.status === "Mtumishi ameridhika na hatua" ? "bg-green-100 text-green-700" :
                                     complaint.status.startsWith("Resolved") ? "bg-blue-100 text-blue-700" :
                                     complaint.status.startsWith("Rejected") ? "bg-red-100 text-red-700" :
                                     complaint.status === "Awaiting More Information" ? "bg-yellow-100 text-yellow-700" :
                                     complaint.status === "Under Review - Additional Information Provided" ? "bg-purple-100 text-purple-700" :
+                                    complaint.status === "lalamiko lako limepokelewa, linafanyiwa kazi" ? "bg-blue-100 text-blue-700" :
                                     "bg-gray-100 text-gray-700"
                                 }`}>{complaint.status}</span>
                             </div>
@@ -396,17 +521,31 @@ export default function ComplaintsPage() {
                                     </CardContent>
                                 </Card>
                             )}
-                            {complaint.rejectionReason && (complaint.status.startsWith("Rejected by") || complaint.status === "Resolved - Rejected by Commission") && (
+                            {complaint.rejectionReason && complaint.status.startsWith("Rejected by") && (
                                 <Card className="mt-2 bg-red-50 border-red-200">
                                     <CardHeader className="pb-1 pt-2">
                                         <CardTitle className="text-sm font-medium text-red-700">Sababu ya Kukataliwa:</CardTitle>
                                     </CardHeader>
                                     <CardContent className="pb-2">
                                         <p className="text-sm text-red-600">{complaint.rejectionReason}</p>
+                                        {complaint.status.includes("Waiting submitter reaction") && (
+                                            <div className="mt-3 pt-3 border-t border-red-200">
+                                                <p className="text-sm text-red-700 mb-2 font-medium">Unaweza kurekebisha na kuwasilisha upya lalamiko lako:</p>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    onClick={() => openResubmissionModal(complaint)}
+                                                    className="border-red-300 text-red-700 hover:bg-red-50"
+                                                >
+                                                    <Edit className="mr-2 h-4 w-4"/>
+                                                    Rekebisha na Wasilisha Upya
+                                                </Button>
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             )}
-                            {(complaint.status === "Resolved - Pending Employee Confirmation" || complaint.status === "Rejected - Pending Employee Confirmation" || complaint.status === "Resolved - Approved by Commission" || complaint.status === "Resolved - Rejected by Commission") && (
+                            {(complaint.status === "Resolved - Pending Employee Confirmation" || complaint.status === "Rejected - Pending Employee Confirmation") && (
                                 <div className="mt-3 pt-3 border-t">
                                     <Button size="sm" onClick={() => handleEmployeeConfirmOutcome(complaint.id)} className="bg-green-600 hover:bg-green-700 text-white">
                                         <CheckCircle className="mr-2 h-4 w-4"/>
@@ -518,16 +657,43 @@ export default function ComplaintsPage() {
                 />
                 <FormField
                   control={form.control}
+                  name="complaintLetter"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4 text-primary"/>Barua ya Lalamiko (PDF)</FormLabel>
+                      <FormControl>
+                        <FileUpload
+                          onUploadSuccess={(objectKey) => {
+                            setComplaintLetterFile(objectKey);
+                            field.onChange(objectKey);
+                          }}
+                          folder="complaints"
+                          maxSize={2 * 1024 * 1024}
+                          accept=".pdf"
+                        />
+                      </FormControl>
+                      <p className="text-sm text-muted-foreground">
+                        Pakia barua yako ya lalamiko kwa muundo wa PDF
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="evidence"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Pakia Vifungo (Si Lazima, PDF/Picha)</FormLabel>
+                      <FormLabel>Pakia Vifungo vingine (Si Lazima, PDF)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="file" 
-                          multiple 
-                          accept=".pdf,.png,.jpg,.jpeg"
-                          onChange={(e) => field.onChange(e.target.files)}
+                        <FileUpload
+                          onUploadSuccess={(objectKey) => {
+                            setEvidenceFile(objectKey);
+                            field.onChange(objectKey);
+                          }}
+                          folder="complaints"
+                          maxSize={2 * 1024 * 1024}
+                          accept=".pdf"
                         />
                       </FormControl>
                       <FormMessage />
@@ -582,9 +748,11 @@ export default function ComplaintsPage() {
                         complaint.status === "Submitted" ? "bg-orange-100 text-orange-700" : 
                         complaint.status === "Under Review" ? "bg-blue-100 text-blue-700" :
                         complaint.status === "Under Review - Additional Information Provided" ? "bg-purple-100 text-purple-700" :
-                        complaint.status === "Awaiting Commission Review" ? "bg-purple-100 text-purple-700" :
+                        complaint.status === "Mtumishi ameridhika na hatua" ? "bg-green-100 text-green-700" :
+                        complaint.status === "lalamiko lako limepokelewa, linafanyiwa kazi" ? "bg-blue-100 text-blue-700" :
                         complaint.status.startsWith("Resolved") ? "bg-green-100 text-green-700" :
                         complaint.status.startsWith("Rejected") ? "bg-red-100 text-red-700" :
+                        complaint.status.startsWith("Closed - Commission Decision") ? "bg-gray-100 text-gray-700" :
                         "bg-gray-100 text-gray-700"
                     }`}>{complaint.status}</span>
                   </div>
@@ -596,12 +764,41 @@ export default function ComplaintsPage() {
                   {complaint.rejectionReason && <p className="text-sm text-destructive"><span className="font-medium">Rejection Reason:</span> {complaint.rejectionReason}</p>}
                   
                   <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => { setSelectedComplaint(complaint); setIsDetailsModalOpen(true); }}>
+                    <Button size="sm" variant="outline" onClick={async () => {
+                        setSelectedComplaint(complaint);
+                        setIsDetailsModalOpen(true);
+                        
+                        // Update status when DO/HHRMD views complaint details
+                        if ((user?.role === 'DO' || user?.role === 'HHRMD') && 
+                            complaint.status === 'Submitted') {
+                          try {
+                            const response = await fetch(`/api/complaints/${complaint.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                status: 'lalamiko lako limepokelewa, linafanyiwa kazi'
+                              })
+                            });
+                            
+                            if (response.ok) {
+                              // Update the local complaint list
+                              setComplaints(prev => 
+                                prev.map(c => 
+                                  c.id === complaint.id 
+                                    ? { ...c, status: 'lalamiko lako limepokelewa, linafanyiwa kazi' }
+                                    : c
+                                )
+                              );
+                            }
+                          } catch (error) {
+                            console.error('Error updating complaint status:', error);
+                          }
+                        }
+                      }}>
                         <Eye className="mr-2 h-4 w-4"/>Tazama Maelezo Kamili
                     </Button>
-                    {complaint.reviewStage === 'initial' && (complaint.status === "Submitted" || complaint.status === "Under Review" || complaint.status === "Under Review - Additional Information Provided") && (
+                    {complaint.reviewStage === 'initial' && (complaint.status === "Submitted" || complaint.status === "Under Review" || complaint.status === "Under Review - Additional Information Provided" || complaint.status === "lalamiko lako limepokelewa, linafanyiwa kazi") && (
                       <>
-                        <Button size="sm" onClick={() => handleInitialAction(complaint.id, 'forward')}>Thibitisha &amp; Peleka kwa Tume ya Ukaguzi</Button>
                         <Button size="sm" variant="destructive" onClick={() => handleInitialAction(complaint.id, 'reject_initial')}>Kataa Lalamiko</Button>
                         <Button size="sm" variant="secondary" onClick={() => openActionModal(complaint, "request_info")}>
                             <Info className="mr-2 h-4 w-4"/>Omba Maelezo Zaidi
@@ -609,13 +806,10 @@ export default function ComplaintsPage() {
                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openActionModal(complaint, "resolve")}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Weka Kama Imetatuliwa (Moja kwa Moja)
                         </Button>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => openCommissionDecisionModal(complaint)}>
+                            <FileText className="mr-2 h-4 w-4"/>Weka Maamuzi ya Tume
+                        </Button>
                       </>
-                    )}
-                    {complaint.reviewStage === 'commission_review' && complaint.status === "Awaiting Commission Review" && complaint.reviewedBy === role && (
-                        <>
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleCommissionDecision(complaint.id, 'commission_approve')}>Tatua (Tumekubali)</Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleCommissionDecision(complaint.id, 'commission_reject')}>Kataa (Tumekataa)</Button>
-                        </>
                     )}
                   </div>
                 </div>
@@ -670,17 +864,71 @@ export default function ComplaintsPage() {
                     <Label className="font-semibold">Nyaraka Zilizofungwa</Label>
                     <div className="mt-2 space-y-2">
                     {selectedComplaint.attachments && selectedComplaint.attachments.length > 0 ? (
-                        selectedComplaint.attachments.map((doc, index) => (
+                        selectedComplaint.attachments.map((objectKey, index) => {
+                          const fileName = objectKey.split('/').pop() || objectKey;
+                          return (
                             <div key={index} className="flex items-center justify-between p-2 rounded-md border bg-secondary/50 text-sm">
                                 <div className="flex items-center gap-2">
                                     <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium text-foreground truncate" title={doc}>{doc}</span>
+                                    <span className="font-medium text-foreground truncate" title={fileName}>{fileName}</span>
                                 </div>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0 flex-shrink-0">
-                                    <a href="#" onClick={(e) => e.preventDefault()} target="_blank" rel="noopener noreferrer">Tazama Hati</a>
-                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handlePreviewFile(objectKey)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const headers: HeadersInit = {};
+                                        if (accessToken) {
+                                          headers['Authorization'] = `Bearer ${accessToken}`;
+                                        }
+                                        
+                                        const response = await fetch(`/api/files/download/${objectKey}`, {
+                                          credentials: 'include',
+                                          headers
+                                        });
+                                        if (response.ok) {
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = fileName;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        } else {
+                                          toast({
+                                            title: 'Download Failed',
+                                            description: 'Could not download the file. Please try again.',
+                                            variant: 'destructive'
+                                          });
+                                        }
+                                      } catch (error) {
+                                        console.error('Download failed:', error);
+                                        toast({
+                                          title: 'Download Failed',
+                                          description: 'Could not download the file. Please try again.',
+                                          variant: 'destructive'
+                                        });
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Download
+                                  </Button>
+                                </div>
                             </div>
-                        ))
+                          );
+                        })
                     ) : (
                         <p className="text-muted-foreground text-sm">Hakuna nyaraka zilizofungwa kwenye ombi hili.</p>
                     )}
@@ -852,6 +1100,250 @@ export default function ComplaintsPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Employee Resubmission Modal */}
+      {isResubmissionModalOpen && selectedComplaintForResubmission && (
+        <Dialog open={isResubmissionModalOpen} onOpenChange={setIsResubmissionModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Rekebisha na Wasilisha Upya Lalamiko</DialogTitle>
+              <DialogDescription>
+                Rekebisha lalamiko lako kufuatia maoni ya afisa na uweke upya. Tafadhali hakikisha kurekebisha makosa yote yaliyooneshwa katika sababu za kukataliwa.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {selectedComplaintForResubmission.rejectionReason && (
+                <Card className="bg-red-50 border-red-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-red-700">Sababu ya Kukataliwa (Hapo awali):</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-red-600">{selectedComplaintForResubmission.rejectionReason}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleResubmitComplaint)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="complaintType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Aina ya Lalamiko</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chagua aina ya lalamiko" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {COMPLAINT_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="subject"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Kichwa cha Lalamiko</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Andika kichwa kifupi cha lalamiko lako" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="complainantPhoneNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Namba ya Simu ya Mlalamikaji</FormLabel>
+                        <FormControl>
+                          <Input placeholder="0xxxxxxxxx" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="nextOfKinPhoneNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Namba ya Simu ya Ndugu wa Karibu</FormLabel>
+                        <FormControl>
+                          <Input placeholder="0xxxxxxxxx" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="complaintText"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Maelezo ya Lalamiko (Yaliyo Rekebiswa)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Eleza lalamiko lako kwa undani. Hakikisha unatoa maarifa yote muhimu na kurekebisha makosa yote yaliyotajwa katika sababu za kukataliwa..." 
+                            rows={6} 
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <DialogFooter className="gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsResubmissionModalOpen(false)}
+                    >
+                      Ghairi
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Inawasilisha...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Wasilisha Upya Lalamiko
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Commission Decision Modal */}
+      {isCommissionDecisionModalOpen && selectedComplaintForCommissionDecision && (
+        <Dialog open={isCommissionDecisionModalOpen} onOpenChange={setIsCommissionDecisionModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Weka Maamuzi ya Tume</DialogTitle>
+              <DialogDescription>
+                Weka maamuzi wa mwisho wa Tume ya Utumishi kuhusu lalamiko hili. Baada ya kuweka maamuzi, lalamiko litafungwa rasmi na hakutakuwa na uwezekano wa kuliwasilisha upya.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardContent className="pt-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Onyo:</strong> Maamuzi haya ni ya mwisho na hayana kurudi nyuma. Lalamiko litafungwa kabisa.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <div>
+                <Label htmlFor="decisionType">Aina ya Uamuzi</Label>
+                <Select value={commissionDecisionType} onValueChange={(value: 'resolved' | 'rejected') => setCommissionDecisionType(value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="resolved">Lalamiko Limetatuliwa</SelectItem>
+                    <SelectItem value="rejected">Lalamiko Limekataliwa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="commissionDecision">Maamuzi ya Tume</Label>
+                <Textarea
+                  id="commissionDecision"
+                  placeholder="Andika maamuzi ya tume kwa undani..."
+                  value={commissionDecision}
+                  onChange={(e) => setCommissionDecision(e.target.value)}
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+
+              {commissionDecisionType === 'resolved' && (
+                <div>
+                  <Label htmlFor="commissionLetter">
+                    Barua ya Tume <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="commissionLetter"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      setCommissionLetter(file || null);
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Chagua barua rasmi ya tume inayoonyesha maamuzi. PDF, Word, au picha zinazokubaliwa.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCommissionDecisionModalOpen(false)}>
+                Ghairi
+              </Button>
+              <Button 
+                onClick={handleCommissionDecision}
+                disabled={isSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                    Inaweka Maamuzi...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4"/>
+                    Weka Maamuzi ya Mwisho
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsPreviewModalOpen(false);
+            setPreviewObjectKey(null);
+          }
+        }}
+        objectKey={previewObjectKey}
+      />
     </div>
   );
 }
